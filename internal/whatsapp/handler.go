@@ -81,19 +81,19 @@ func (h *Handler) handleMessage(ctx context.Context, evt *events.Message) {
 	var replyTo string
 	if evt.Info.IsGroup {
 		// Group message: check if this group is allowed.
-		groupJID := evt.Info.Chat.User
-		if !h.allowedGroups[groupJID] {
+		if !h.allowedGroups[evt.Info.Chat.User] {
 			return // not an allowed group
 		}
 		// Reply goes to the group, not the individual sender.
-		replyTo = groupJID + "@g.us"
+		replyTo = evt.Info.Chat.String()
 	} else {
 		// Personal chat: owner whitelist check.
 		if !h.ownerNumbers[evt.Info.Sender.User] {
 			log.Printf("🚫 [REJECTED] Unauthorized DM from: %s", evt.Info.Sender.User)
 			return
 		}
-		replyTo = evt.Info.Sender.User
+		// Use full JID string (could be @s.whatsapp.net or @lid).
+		replyTo = evt.Info.Sender.String()
 	}
 
 	// Extract text from all supported variants.

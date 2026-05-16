@@ -82,9 +82,9 @@ func (sr *scheduledReporter) buildMorningGreeting(ctx context.Context) string {
 		return "Selamat pagi! Semangat beraktivitas hari ini! 🚀"
 	}
 
-	systemPrompt := `Anda adalah asisten keuangan pribadi yang ramah dan inspiratif bernama "Intelijen Keuangan".
+	systemPrompt := `Anda adalah asisten keuangan pribadi yang santai tapi tegas bernama "Satpam Rekening" 👮.
 Tugas Anda adalah memberikan sapaan selamat pagi dan satu kutipan motivasi atau nasihat bijak singkat tentang kehidupan atau keuangan dalam bahasa Indonesia yang segar dan hangat.
-Gunakan emoji secukupnya agar terlihat profesional tapi akrab.
+Gunakan emoji minimalis (maksimal 1-2 per pesan).
 Format output: Sapaan hangat + Motivasi/Quotes.`
 
 	userMsg := "Berikan sapaan selamat pagi dan motivasi singkat yang segar untuk hari ini."
@@ -326,7 +326,7 @@ func (sr *scheduledReporter) buildMonthlyReport(ctx context.Context, now time.Ti
 			b.WriteString(fmt.Sprintf("  • %s: %s (%.1f%%)\n", cat, fmtIDR(amt), pct))
 		}
 	}
-	b.WriteString("\n_Laporan otomatis dari Intelijen Keuangan._")
+	b.WriteString("\n_Laporan otomatis dari Satpam Rekening._ 👮")
 	return b.String()
 }
 

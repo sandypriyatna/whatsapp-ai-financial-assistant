@@ -1,6 +1,6 @@
-# 🤖 Intelijen Keuangan: WhatsApp AI Financial Assistant
+# 🤖 Satpam Rekening: WhatsApp AI Financial Assistant
 
-**Intelijen Keuangan** adalah asisten finansial cerdas berbasis AI yang beroperasi langsung di dalam WhatsApp. Bot ini bertindak sebagai akuntan pribadi yang mencatat transaksi, menganalisis arus kas, mengelola catatan, dan memberikan pengingat terjadwal—semuanya dikelola secara otomatis di **Google Sheets** dengan format visual yang profesional dan "paten".
+**Satpam Rekening** 👮 adalah asisten finansial pribadi cerdas berbasis AI yang beroperasi langsung di dalam WhatsApp. Bot ini bertindak sebagai penjaga rekening pribadi yang mencatat transaksi, menganalisis arus kas, mengelola catatan, dan memberikan pengingat terjadwal—semuanya dikelola secara otomatis di **Google Sheets** dengan format visual yang profesional dan bersih.
 
 ---
 
