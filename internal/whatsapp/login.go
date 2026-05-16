@@ -60,27 +60,8 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 	client := whatsmeow.NewClient(deviceStore, log)
 	client.EnableAutoReconnect = true
 
-	// First-time login requires QR scan or pairing code.
+	// First-time login
 	if client.Store.ID == nil {
-		if pairingPhone != "" {
-			fmt.Printf("📲 Memulai pairing code untuk nomor: %s\n", pairingPhone)
-			if err := client.Connect(); err != nil {
-				return nil, fmt.Errorf("failed to connect for pairing: %w", err)
-			}
-			// Wait a few seconds for the connection to stabilize before requesting the code.
-			fmt.Println("⏳ Menghubungkan ke WhatsApp...")
-			time.Sleep(3 * time.Second)
-			code, err := client.PairPhone(ctx, pairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
-			if err != nil {
-				return nil, fmt.Errorf("failed to get pairing code: %w", err)
-			}
-			fmt.Printf("\n🔑 PAIRING CODE: %s\n", code)
-			fmt.Println("Buka WhatsApp HP -> Settings -> Linked Devices -> Link with phone number instead")
-			fmt.Println("Masukkan kode di atas.")
-			fmt.Println("Menunggu pairing selesai...")
-			return client, nil
-		}
-
 		qrChan, err := client.GetQRChannel(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create QR channel: %w", err)
@@ -90,7 +71,20 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 			return nil, fmt.Errorf("failed to connect WhatsApp client: %w", err)
 		}
 
-		fmt.Println("📱 Scan QR code berikut di WhatsApp (Linked Devices):")
+		// If phone number is provided, generate pairing code as an alternative.
+		if pairingPhone != "" {
+			// Small delay to ensure connection is ready for pairing request
+			go func() {
+				time.Sleep(2 * time.Second)
+				code, err := client.PairPhone(ctx, pairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+				if err == nil {
+					fmt.Printf("\n🔑 ALTERNATIF PAIRING CODE: %s\n", code)
+					fmt.Println("Gunakan kode ini di HP (Link with phone number) jika QR di bawah berantakan.\n")
+				}
+			}()
+		}
+
+		fmt.Println("📱 SCAN QR CODE BERIKUT (Atau gunakan Pairing Code di atas):")
 		for evt := range qrChan {
 			switch evt.Event {
 			case "code":
@@ -106,27 +100,16 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 
 			case "timeout":
 				client.Disconnect()
-				return nil, fmt.Errorf("QR code timed out, please restart")
+				return nil, fmt.Errorf("pairing timed out")
 
 			case "error":
 				client.Disconnect()
-				if evt.Error != nil {
-					return nil, fmt.Errorf("QR pairing error: %w", evt.Error)
-				}
-				return nil, fmt.Errorf("QR pairing error")
-
-			default:
-				// Non-success terminal events are treated as failures.
-				client.Disconnect()
-				if evt.Error != nil {
-					return nil, fmt.Errorf("pairing failed (%s): %w", evt.Event, evt.Error)
-				}
-				return nil, fmt.Errorf("pairing failed (%s)", evt.Event)
+				return nil, fmt.Errorf("pairing error: %v", evt.Error)
 			}
 		}
 
 		client.Disconnect()
-		return nil, fmt.Errorf("QR channel closed before pairing succeeded")
+		return nil, fmt.Errorf("QR channel closed without success")
 	}
 
 	// Existing session: connect directly.
