@@ -10,15 +10,15 @@ import (
 
 func FormatExpenseRecorded(id, description, category string, amount float64) string {
 	return fmt.Sprintf(
-		"✅ *Pengeluaran Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💰 Jumlah: %s\n\n📅 %s\n\n...\n👮 Satpam Rekening",
-		id, safe(description), safe(category), formatIDR(amount), nowWIBString(),
+		"✅ *Pengeluaran tercatat!*\n\n📝 %s\n📂 %s\n💰 %s\n\n📅 %s\n\n_Kirim \"undo\" dalam 5 menit jika ada yang salah._\n\n—👮 Satpam Rekening",
+		safe(description), safe(category), formatIDR(amount), nowWIBString(),
 	)
 }
 
 func FormatIncomeRecorded(id, description, category string, amount float64) string {
 	return fmt.Sprintf(
-		"✅ *Pemasukan Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💵 Jumlah: %s\n\n📅 %s\n\n...\n👮 Satpam Rekening",
-		id, safe(description), safe(category), formatIDR(amount), nowWIBString(),
+		"✅ *Pemasukan tercatat!*\n\n📝 %s\n📂 %s\n💰 %s\n\n📅 %s\n\n_Kirim \"undo\" dalam 5 menit jika ada yang salah._\n\n—👮 Satpam Rekening",
+		safe(description), safe(category), formatIDR(amount), nowWIBString(),
 	)
 }
 
@@ -202,7 +202,7 @@ func withThousandDots(s string) string {
 
 func nowWIBString() string {
 	wib := time.FixedZone("WIB", 7*60*60)
-	return time.Now().In(wib).Format("02 Jan 2006, 15:04 WIB")
+	return time.Now().In(wib).Format("02 Jan 2006 • 15:04 WIB")
 }
 
 func safe(s string) string {

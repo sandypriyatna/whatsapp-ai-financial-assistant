@@ -123,7 +123,7 @@ var monthNamesID = map[time.Month]string{
 	time.December:  "Desember",
 }
 
-func tabNameForTime(t time.Time) string {
+func TabNameForTime(t time.Time) string {
 	local := t.In(WIB)
 	monthName, ok := monthNamesID[local.Month()]
 	if !ok {
@@ -213,7 +213,7 @@ func (r *GoogleSheetRepository) AppendTransaction(ctx context.Context, tx *Trans
 		return fmt.Errorf("transaction is nil")
 	}
 
-	tabName := tabNameForTime(tx.Date)
+	tabName := TabNameForTime(tx.Date)
 
 	if err := r.EnsureTabExists(ctx, tabName); err != nil {
 		return fmt.Errorf("failed to ensure tab %q: %w", tabName, err)
@@ -339,7 +339,7 @@ func (r *GoogleSheetRepository) GetTransactionByID(ctx context.Context, id strin
 	if err != nil {
 		return nil, 0, "", fmt.Errorf("invalid transaction id date: %w", err)
 	}
-	tabName := tabNameForTime(t)
+	tabName := TabNameForTime(t)
 
 	txs, err := r.GetTransactions(ctx, tabName)
 	if err != nil {
@@ -537,7 +537,7 @@ func (r *GoogleSheetRepository) SetBudget(ctx context.Context, category string, 
 	}
 
 	now := time.Now().In(WIB)
-	tab := tabNameForTime(now)
+	tab := TabNameForTime(now)
 
 	if targetRow > 0 {
 		sumFormula := fmt.Sprintf(`=SUMIFS('%s'!G:G,'%s'!D:D,"Pengeluaran",'%s'!E:E,A%d)`, tab, tab, tab, targetRow)
@@ -869,7 +869,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 
 	now := time.Now().In(WIB)
 	year := now.Year()
-	currentTab := tabNameForTime(now)
+	currentTab := TabNameForTime(now)
 
 	// Generate ordered month names for the current year.
 	monthOrder := []time.Month{
@@ -2454,14 +2454,14 @@ func (r *GoogleSheetRepository) SearchTransactions(ctx context.Context, filter T
 		// Collect all month tabs between DateFrom and DateTo.
 		tabsToScan = monthTabsBetween(filter.DateFrom, filter.DateTo)
 	} else if !filter.DateFrom.IsZero() {
-		tabsToScan = []string{tabNameForTime(filter.DateFrom), tabNameForTime(now)}
+		tabsToScan = []string{TabNameForTime(filter.DateFrom), TabNameForTime(now)}
 		// Deduplicate if same month.
 		if tabsToScan[0] == tabsToScan[1] {
 			tabsToScan = tabsToScan[:1]
 		}
 	} else {
 		// Default: current month only.
-		tabsToScan = []string{tabNameForTime(now)}
+		tabsToScan = []string{TabNameForTime(now)}
 	}
 
 	var results []Transaction
@@ -2506,7 +2506,7 @@ func monthTabsBetween(from, to time.Time) []string {
 	end := time.Date(to.Year(), to.Month(), 1, 0, 0, 0, 0, WIB)
 
 	for !cur.After(end) {
-		tabs = append(tabs, tabNameForTime(cur))
+		tabs = append(tabs, TabNameForTime(cur))
 		cur = cur.AddDate(0, 1, 0)
 	}
 	return tabs
@@ -2572,7 +2572,7 @@ func (r *GoogleSheetRepository) RefreshDashboard(ctx context.Context) error {
 	}
 
 	now := time.Now().In(WIB)
-	currentTab := tabNameForTime(now)
+	currentTab := TabNameForTime(now)
 	year := now.Year()
 
 	monthNames := map[time.Month]string{

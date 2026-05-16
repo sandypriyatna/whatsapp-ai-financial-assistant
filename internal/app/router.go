@@ -497,7 +497,8 @@ func (r *AppRouter) executeTransactionResult(ctx context.Context, sender string,
 
 	// Save to undo store so user can immediately undo if needed.
 	// Row index will be re-resolved at undo time via a sheet scan.
-	r.undoStore.save(sender, tx, "", 0)
+	tabName := sheets.TabNameForTime(tx.Date)
+	r.undoStore.save(sender, tx, tabName, 0)
 
 	return result, budgetAlert, nil
 }
@@ -560,7 +561,7 @@ func formatCompactTransactionSummary(results []transactionExecResult) string {
 	b.WriteString("\n\n📅 ")
 	b.WriteString(last.Format("02 Jan 2006 • 15:04 WIB"))
 	b.WriteString("\n\n_Kirim \"undo\" dalam 5 menit jika ada yang salah._")
-	b.WriteString("\n\n...\n👮 Satpam Rekening")
+	b.WriteString("\n\n—👮 Satpam Rekening")
 	return b.String()
 }
 
