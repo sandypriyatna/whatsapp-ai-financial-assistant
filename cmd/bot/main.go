@@ -85,11 +85,12 @@ func main() {
 	}
 	reminderService := reminder.NewService(repo, messenger, allRecipients, llmClient)
 
-	// 6) LLM preflight (fail fast)
+	// 6) LLM preflight (warn only, don't crash)
 	if err := verifyLLMConnectivity(ctx, llmClient); err != nil {
-		log.Fatalf("❌ %v", err)
+		log.Printf("⚠️ LLM preflight check failed: %v. Bot tetap berjalan tanpa fitur AI.", err)
+	} else {
+		log.Println("✅ LLM preflight check passed")
 	}
-	log.Println("✅ LLM preflight check passed")
 
 	// 7) Start reminder scheduler
 	if err := reminderService.Start(ctx); err != nil {
