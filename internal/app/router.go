@@ -447,14 +447,6 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 
 	if len(txResults) > 0 {
 		responses = append([]string{formatCompactTransactionSummary(txResults)}, responses...)
-
-		// Add current financial condition summary
-		if r.financeService != nil {
-			todayEx, monthEx, monthIn, err := r.financeService.GetQuickSummary(ctx)
-			if err == nil {
-				responses = append(responses, formatter.FormatQuickSummary(todayEx, monthEx, monthIn))
-			}
-		}
 	}
 	if len(budgetAlerts) > 0 {
 		responses = append(responses, strings.Join(budgetAlerts, "\n\n"))
@@ -481,14 +473,6 @@ func (r *AppRouter) executeTransaction(ctx context.Context, sender string, args 
 	}
 	if strings.TrimSpace(budgetAlert) != "" {
 		response += "\n\n" + budgetAlert
-	}
-
-	// Add quick summary
-	if r.financeService != nil {
-		todayEx, monthEx, monthIn, err := r.financeService.GetQuickSummary(ctx)
-		if err == nil {
-			response += "\n\n" + formatter.FormatQuickSummary(todayEx, monthEx, monthIn)
-		}
 	}
 	return response
 }
