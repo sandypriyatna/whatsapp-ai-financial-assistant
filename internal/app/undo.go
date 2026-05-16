@@ -71,6 +71,9 @@ func isUndoIntent(text string) bool {
 	normalized := normalizeLower(text)
 	keywords := []string{
 		"undo",
+		"umdo",
+		"unso",
+		"undo ",
 		"batal yang tadi",
 		"batalin yang tadi",
 		"hapus yang tadi",

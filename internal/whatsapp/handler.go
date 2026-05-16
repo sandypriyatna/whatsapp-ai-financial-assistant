@@ -74,7 +74,7 @@ func (h *Handler) handleMessage(ctx context.Context, evt *events.Message) {
 		log.Printf("📩 [GROUP] JID: %s | Sender: %s | Group: %s",
 			evt.Info.Chat.User, evt.Info.Sender.User, evt.Info.Chat.String())
 	} else {
-		log.Printf("📩 [DM] Sender: %s", evt.Info.Sender.User)
+		log.Printf("📩 [DM] Sender: %s | Text: %s", evt.Info.Sender.User, getTextFromMessage(evt.Message))
 	}
 
 	// Determine reply target and authorization.

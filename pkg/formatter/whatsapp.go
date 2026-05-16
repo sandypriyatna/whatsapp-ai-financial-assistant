@@ -121,6 +121,14 @@ func FormatConfirmation(description string, txType string, amount float64, categ
 	)
 }
 
+func FormatQuickSummary(todayExpense, monthExpense, monthIncome float64) string {
+	net := monthIncome - monthExpense
+	return fmt.Sprintf(
+		"📈 *Kondisi Keuangan*\n• Pengeluaran hari ini: %s\n• Pengeluaran bulan ini: %s\n• Saldo bersih bulan ini: %s",
+		formatIDR(todayExpense), formatIDR(monthExpense), formatIDR(net),
+	)
+}
+
 func formatReport(title, period string, totalIncome, totalExpense float64, categories map[string]float64) string {
 	net := totalIncome - totalExpense
 	top := topCategories(categories, 5)

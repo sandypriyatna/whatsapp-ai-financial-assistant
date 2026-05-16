@@ -186,6 +186,33 @@ func (s *FinanceService) CheckBudget(ctx context.Context, category string) (stri
 	return "", nil
 }
 
+func (s *FinanceService) GetQuickSummary(ctx context.Context) (todayExpense, monthExpense, monthIncome float64, err error) {
+	if s == nil || s.repo == nil {
+		return 0, 0, 0, fmt.Errorf("sheet repository is nil")
+	}
+
+	now := nowWIB()
+	tabName := tabNameForTime(now)
+
+	txs, err := s.repo.GetTransactions(ctx, tabName)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	todayStr := now.Format("2006-01-02")
+	for _, tx := range txs {
+		if tx.Type == sheets.Expense {
+			monthExpense += tx.Amount
+			if tx.Date.In(sheets.WIB).Format("2006-01-02") == todayStr {
+				todayExpense += tx.Amount
+			}
+		} else {
+			monthIncome += tx.Amount
+		}
+	}
+	return todayExpense, monthExpense, monthIncome, nil
+}
+
 func (s *FinanceService) GenerateReport(ctx context.Context, period string) (*ReportData, error) {
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("sheet repository is nil")

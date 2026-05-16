@@ -3,6 +3,7 @@ package sheets
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -237,7 +238,7 @@ func (r *GoogleSheetRepository) AppendTransaction(ctx context.Context, tx *Trans
 		_, e := r.service.Spreadsheets.Values.
 			Append(r.spreadsheetID, appendRange, valueRange).
 			ValueInputOption("USER_ENTERED").
-			InsertDataOption("OVERWRITE").
+			InsertDataOption("INSERT_ROWS").
 			IncludeValuesInResponse(true).
 			Context(ctx).
 			Do()
@@ -316,6 +317,7 @@ func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName str
 	for _, row := range resp.Values {
 		tx, err := TransactionFromRow(row)
 		if err != nil {
+			log.Printf("⚠️ [SHEETS] Skipping row due to parse error: %v | Row: %v", err, row)
 			continue
 		}
 		out = append(out, *tx)

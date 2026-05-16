@@ -169,12 +169,35 @@ func cellFloat64(v interface{}) (float64, error) {
 		if s == "" {
 			return 0, fmt.Errorf("empty string")
 		}
-		// tolerate Indonesian thousand separator in case values are returned as text
-		s = strings.ReplaceAll(s, ".", "")
-		s = strings.ReplaceAll(s, ",", ".")
+		// Clean up common currency prefixes and spaces
+		s = strings.ReplaceAll(s, "Rp", "")
+		s = strings.TrimSpace(s)
+		s = strings.ReplaceAll(s, " ", "")
+		s = strings.ReplaceAll(s, "\u00a0", "") // non-breaking space
+
+		// If both comma and dot exist, remove the one that appears first (thousand separator)
+		if strings.Contains(s, ",") && strings.Contains(s, ".") {
+			if strings.Index(s, ",") < strings.Index(s, ".") {
+				s = strings.ReplaceAll(s, ",", "")
+			} else {
+				s = strings.ReplaceAll(s, ".", "")
+				s = strings.ReplaceAll(s, ",", ".")
+			}
+		} else {
+			// If only one type of separator exists and it appears multiple times, it's a thousand separator
+			if strings.Count(s, ",") > 1 {
+				s = strings.ReplaceAll(s, ",", "")
+			} else if strings.Count(s, ".") > 1 {
+				s = strings.ReplaceAll(s, ".", "")
+			} else if strings.Contains(s, ",") {
+				// Single comma: treat as decimal point for ID context
+				s = strings.ReplaceAll(s, ",", ".")
+			}
+		}
+
 		f, err := strconv.ParseFloat(s, 64)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to parse float %q: %w", s, err)
 		}
 		return f, nil
 	default:

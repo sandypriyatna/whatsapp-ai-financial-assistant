@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ ATURAN UTAMA:
 10. Jangan tanya klarifikasi jika kamu sudah bisa menentukan type, amount, dan category dengan yakin.
 11. Jika tidak yakin antara expense/income atau jumlahnya tidak jelas, baru tanya klarifikasi.
 12. Untuk pencarian transaksi, gunakan tool search_transactions dengan filter yang tepat. 🔍
+13. Jika pesan terdeteksi sebagai niat membatalkan (seperti "undo", "umdo", "batal"), jangan panggil tool transaksi. Sistem internal akan menanganinya.
 
 KATEGORI RESMI:
 Pengeluaran → Makanan | Transportasi | Rumah Tangga | Belanja | Kesehatan | Pendidikan | Hiburan | Fashion | Komunikasi | Perawatan | Sosial | Lainnya
@@ -251,14 +253,16 @@ func (r *AppRouter) handleUndo(ctx context.Context, sender string) string {
 	}
 
 	rowIndex := -1
+	targetID := strings.TrimSpace(entry.tx.ID)
 	for i, tx := range txs {
-		if tx.ID == entry.tx.ID {
+		if strings.TrimSpace(tx.ID) == targetID {
 			rowIndex = i + 2 // 1-indexed, +1 header
 			break
 		}
 	}
 	if rowIndex < 2 {
-		return fmt.Sprintf("⚠️ Transaksi `%s` tidak ditemukan lagi (mungkin sudah dihapus).", entry.tx.ID)
+		log.Printf("❌ [UNDO_FAIL] Transaction %s not found in tab %s. Total transactions in tab: %d", targetID, entry.tabName, len(txs))
+		return fmt.Sprintf("⚠️ Transaksi *%s* tidak ditemukan lagi di tab %s (mungkin sudah dihapus).", targetID, entry.tabName)
 	}
 
 	if err := r.repo.DeleteTransaction(ctx, entry.tabName, rowIndex); err != nil {
@@ -443,6 +447,14 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 
 	if len(txResults) > 0 {
 		responses = append([]string{formatCompactTransactionSummary(txResults)}, responses...)
+
+		// Add current financial condition summary
+		if r.financeService != nil {
+			todayEx, monthEx, monthIn, err := r.financeService.GetQuickSummary(ctx)
+			if err == nil {
+				responses = append(responses, formatter.FormatQuickSummary(todayEx, monthEx, monthIn))
+			}
+		}
 	}
 	if len(budgetAlerts) > 0 {
 		responses = append(responses, strings.Join(budgetAlerts, "\n\n"))
@@ -469,6 +481,14 @@ func (r *AppRouter) executeTransaction(ctx context.Context, sender string, args 
 	}
 	if strings.TrimSpace(budgetAlert) != "" {
 		response += "\n\n" + budgetAlert
+	}
+
+	// Add quick summary
+	if r.financeService != nil {
+		todayEx, monthEx, monthIn, err := r.financeService.GetQuickSummary(ctx)
+		if err == nil {
+			response += "\n\n" + formatter.FormatQuickSummary(todayEx, monthEx, monthIn)
+		}
 	}
 	return response
 }
