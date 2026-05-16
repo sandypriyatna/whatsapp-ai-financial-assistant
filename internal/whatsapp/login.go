@@ -63,6 +63,7 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 	// First-time login requires QR scan or pairing code.
 	if client.Store.ID == nil {
 		if pairingPhone != "" {
+			fmt.Printf("📲 Memulai pairing code untuk nomor: %s\n", pairingPhone)
 			if err := client.Connect(); err != nil {
 				return nil, fmt.Errorf("failed to connect for pairing: %w", err)
 			}
