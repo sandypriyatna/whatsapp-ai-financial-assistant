@@ -65,7 +65,7 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 			if err := client.Connect(); err != nil {
 				return nil, fmt.Errorf("failed to connect for pairing: %w", err)
 			}
-			code, err := client.PairPhone(pairingPhone, true, whatsmeow.PairProtoHashTypeChrome, "Chrome (Linux)")
+			code, err := client.PairPhone(ctx, pairingPhone, true, whatsmeow.PairProtoHashTypeChrome, "Chrome (Linux)")
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pairing code: %w", err)
 			}
