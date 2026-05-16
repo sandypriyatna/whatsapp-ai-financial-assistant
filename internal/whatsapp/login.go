@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mdp/qrterminal/v3"
 	"go.mau.fi/whatsmeow"
@@ -65,6 +66,9 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 			if err := client.Connect(); err != nil {
 				return nil, fmt.Errorf("failed to connect for pairing: %w", err)
 			}
+			// Wait a few seconds for the connection to stabilize before requesting the code.
+			fmt.Println("⏳ Menghubungkan ke WhatsApp...")
+			time.Sleep(3 * time.Second)
 			code, err := client.PairPhone(ctx, pairingPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
 			if err != nil {
 				return nil, fmt.Errorf("failed to get pairing code: %w", err)
