@@ -10,14 +10,14 @@ import (
 
 func FormatExpenseRecorded(id, description, category string, amount float64) string {
 	return fmt.Sprintf(
-		"✅ *Pengeluaran Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💰 Jumlah: %s\n\n📅 %s",
+		"✅ *Pengeluaran Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💰 Jumlah: %s\n\n📅 %s\n\n...\n👮 Satpam Rekening",
 		id, safe(description), safe(category), formatIDR(amount), nowWIBString(),
 	)
 }
 
 func FormatIncomeRecorded(id, description, category string, amount float64) string {
 	return fmt.Sprintf(
-		"✅ *Pemasukan Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💵 Jumlah: %s\n\n📅 %s",
+		"✅ *Pemasukan Dicatat!*\n\n🆔 ID: %s\n📝 Deskripsi: %s\n📂 Kategori: %s\n💵 Jumlah: %s\n\n📅 %s\n\n...\n👮 Satpam Rekening",
 		id, safe(description), safe(category), formatIDR(amount), nowWIBString(),
 	)
 }

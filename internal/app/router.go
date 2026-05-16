@@ -558,6 +558,7 @@ func formatCompactTransactionSummary(results []transactionExecResult) string {
 	b.WriteString("\n\n📅 ")
 	b.WriteString(last.Format("02 Jan 2006 • 15:04 WIB"))
 	b.WriteString("\n\n_Kirim \"undo\" dalam 5 menit jika ada yang salah._")
+	b.WriteString("\n\n...\n👮 Satpam Rekening")
 	return b.String()
 }
 
