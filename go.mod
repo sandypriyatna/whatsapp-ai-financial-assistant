@@ -4,11 +4,11 @@ go 1.25.5
 
 require (
 	github.com/joho/godotenv v1.5.1
+	github.com/mattn/go-sqlite3 v1.14.34
 	github.com/mdp/qrterminal/v3 v3.2.1
 	go.mau.fi/whatsmeow v0.0.0-20260305215846-fc65416c22c4
 	google.golang.org/api v0.272.0
 	google.golang.org/protobuf v1.36.11
-	modernc.org/sqlite v1.50.1
 )
 
 require (
@@ -54,5 +54,8 @@ require (
 	modernc.org/libc v1.72.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
+	modernc.org/sqlite v1.50.1 // indirect
 	rsc.io/qr v0.2.0 // indirect
 )
+
+replace github.com/mattn/go-sqlite3 => github.com/glebarez/go-sqlite v1.22.0
