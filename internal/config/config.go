@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode"
 
 	"github.com/joho/godotenv"
 )
@@ -18,7 +17,7 @@ type Config struct {
 	GoogleCredsPath  string // GOOGLE_APPLICATION_CREDENTIALS — required if JSON is empty
 	SheetsID         string // SHEETS_SPREADSHEET_ID — required
 	WASessionDBPath  string // WHATSAPP_SESSION_DB_PATH — required
-	OwnerPhoneNumber []string // OWNER_PHONE_NUMBER — required, digits only, min 10 chars, comma-separated list 
+	OwnerIDs         []string // OWNER_IDS — required, comma-separated list of phone numbers or LIDs
 	AllowedGroupJIDs []string // ALLOWED_GROUP_JIDS — optional, comma-separated group JID user parts
 }
 
@@ -37,7 +36,7 @@ func Load() (*Config, error) {
 		GoogleCredsPath:  strings.TrimSpace(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")),
 		SheetsID:         strings.TrimSpace(os.Getenv("SHEETS_SPREADSHEET_ID")),
 		WASessionDBPath:  strings.TrimSpace(os.Getenv("WHATSAPP_SESSION_DB_PATH")),
-		OwnerPhoneNumber: parseCommaSeparated(os.Getenv("OWNER_PHONE_NUMBER")),
+		OwnerIDs:         parseCommaSeparated(os.Getenv("OWNER_IDS")),
 		AllowedGroupJIDs: parseCommaSeparated(os.Getenv("ALLOWED_GROUP_JIDS")),
 	}
 
@@ -57,8 +56,8 @@ func validate(cfg *Config) error {
 		"WHATSAPP_SESSION_DB_PATH": cfg.WASessionDBPath,
 	}
 
-	if len(cfg.OwnerPhoneNumber) == 0 {
-		return fmt.Errorf("missing required env var: OWNER_PHONE_NUMBER")
+	if len(cfg.OwnerIDs) == 0 {
+		return fmt.Errorf("missing required env var: OWNER_IDS")
 	}
 
 	for key, value := range required {
@@ -84,15 +83,11 @@ func validate(cfg *Config) error {
 		}
 	}
 
-	for _, number := range cfg.OwnerPhoneNumber {
-		if len(number) < 10 {
-			return fmt.Errorf("invalid OWNER_PHONE_NUMBER (%s): must be at least 10 digits", number)
+	for _, id := range cfg.OwnerIDs {
+		if len(id) < 10 {
+			return fmt.Errorf("invalid OWNER_IDS (%s): must be at least 10 characters", id)
 		}
-		for _, r := range number {
-			if !unicode.IsDigit(r) {
-				return fmt.Errorf("invalid OWNER_PHONE_NUMBER (%s): must contain digits only", number)
-			}
-		}
+		// Allow alphanumeric for LIDs.
 	}
 
 	return nil

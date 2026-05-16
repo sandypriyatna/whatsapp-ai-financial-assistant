@@ -581,15 +581,14 @@ func formatReminderPing(rem sheets.Reminder, now time.Time) string {
 	if rem.TargetTime != "" {
 		when += " " + rem.TargetTime + " WIB"
 	} else {
-		when += " (tanpa jam spesifik)"
+		when += " (3x sehari)"
 	}
 
 	return fmt.Sprintf(
-		"⏰ *Pengingat*\n🆔 %s\n🗓️ Target: %s\n📝 %s\n\nKalau sudah dilakukan, kamu bisa balas natural (contoh: \"gw udah %s\") atau pakai:\n*/done %s*",
+		"🔔 *WAKTUNYA:* %s\n\n🆔 ID: %s\n🗓️ Target: %s\n\nJika sudah dilakukan, ketik: */done %s* ✅",
+		rem.Message,
 		rem.ID,
 		when,
-		rem.Message,
-		rem.Message,
 		rem.ID,
 	)
 }

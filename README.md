@@ -84,7 +84,7 @@ SHEETS_SPREADSHEET_ID=your_spreadsheet_id_here
 
 # --- WhatsApp ---
 WHATSAPP_SESSION_DB_PATH=./data/whatsapp/session.db
-OWNER_PHONE_NUMBER=6281234567890
+OWNER_IDS=6281234567890,85xxxxxxxxxxxx
 
 # --- Group Support (Optional) ---
 ALLOWED_GROUP_JIDS=120363xxxxxxxx@g.us

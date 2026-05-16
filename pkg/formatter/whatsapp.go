@@ -35,33 +35,33 @@ func FormatMonthlyReport(month string, totalIncome, totalExpense float64, catego
 }
 
 func FormatWelcome() string {
-	return "👋 *Halo! Selamat datang di WA AI Assistant!*\n\n" +
-		"Saya asisten keuangan pribadi Anda.\n\n" +
-		"✨ Fitur utama:\n" +
-		"• Catat pengeluaran/pemasukan pakai bahasa natural\n" +
-		"• Laporan harian, mingguan, bulanan\n" +
-		"• Budget per kategori + peringatan\n" +
-		"• Catatan cepat dan export Google Sheets\n\n" +
-		"Ketik */help* untuk melihat semua perintah."
+	return "👋 *Halo! Selamat datang di Intelijen Keuangan!*\n\n" +
+		"Saya asisten keuangan pribadi cerdas Anda. 🤖\n\n" +
+		"✨ *Fitur utama:*\n" +
+		"• 🧠 Catat transaksi pakai bahasa sehari-hari\n" +
+		"• 📊 Laporan harian, mingguan, bulanan\n" +
+		"• 🎯 Budget per kategori + peringatan\n" +
+		"• 📝 Catatan cepat & export Google Sheets\n\n" +
+		"Ketik */help* untuk melihat semua perintah. 📖"
 }
 
 func FormatHelp() string {
 	return "📖 *Daftar Perintah:*\n\n" +
 		"💰 *Keuangan*\n" +
-		"• Kirim pesan seperti \"beli ayam crispy 16k\" untuk mencatat pengeluaran\n" +
-		"• /laporan [hari ini|minggu ini|bulan ini] — Lihat laporan\n" +
-		"• /budget [kategori] [jumlah] — Atur budget\n" +
-		"• /edit [ID] [field] [nilai] — Edit transaksi\n" +
-		"• /hapus [ID] — Hapus transaksi\n\n" +
+		"• Kirim pesan seperti \"beli ayam crispy 16k\" untuk mencatat\n" +
+		"• /laporan [hari ini|minggu ini|bulan ini] — Lihat laporan 📊\n" +
+		"• /budget [kategori] [jumlah] — Atur budget 🎯\n" +
+		"• /edit [ID] [field] [nilai] — Edit transaksi ✏️\n" +
+		"• /hapus [ID] — Hapus transaksi 🗑️\n\n" +
 		"📝 *Catatan*\n" +
-		"• /notes [teks] — Simpan catatan cepat\n\n" +
+		"• /notes [teks] — Simpan catatan cepat 📓\n\n" +
 		"⏰ *Pengingat*\n" +
-		"• /reminder [teks] — Buat pengingat (contoh: /reminder tanggal 26 maret bayar vps)\n" +
-		"• /done [ID] — Tandai pengingat sudah selesai\n\n" +
+		"• /reminder [teks] — Buat pengingat 🔔\n" +
+		"• /done [ID] — Tandai sudah selesai ✅\n\n" +
 		"📂 *Lainnya*\n" +
-		"• /kategori — Lihat daftar kategori\n" +
-		"• /export — Dapatkan link Google Sheets\n" +
-		"• /help — Tampilkan bantuan ini"
+		"• /kategori — Lihat daftar kategori 🏷️\n" +
+		"• /export — Dapatkan link Google Sheets 🔗\n" +
+		"• /help — Tampilkan bantuan ini 📖"
 }
 
 func FormatBudgetAlert(category string, budget, spent, remaining float64) string {
@@ -79,11 +79,11 @@ func FormatBudgetAlert(category string, budget, spent, remaining float64) string
 }
 
 func FormatBudgetSet(category string, amount float64) string {
-	return fmt.Sprintf("✅ Budget *%s* diatur ke *%s* per bulan.", safe(category), formatIDR(amount))
+	return fmt.Sprintf("✅ *Budget Berhasil Diatur!*\n\nKategori *%s* diatur ke *%s* per bulan. 🎯", safe(category), formatIDR(amount))
 }
 
 func FormatNoteSaved(note string) string {
-	return fmt.Sprintf("✅ Catatan disimpan!\n📝 \"%s\"", safe(note))
+	return fmt.Sprintf("✅ *Catatan disimpan!* 📓\n\n📝 \"%s\"", safe(note))
 }
 
 func FormatTransactionDeleted(id string) string {
@@ -106,7 +106,7 @@ func FormatCategories(expenseCategories, incomeCategories []string) string {
 }
 
 func FormatExport(url string) string {
-	return fmt.Sprintf("📊 *Data Keuangan Anda*\n🔗 Link Google Sheets:\n%s", safe(url))
+	return fmt.Sprintf("📊 *Data Keuangan Anda*\n\n🔗 Link Google Sheets:\n%s\n\n_Pantau terus lewat spreadsheet untuk rincian lebih detail!_ ✨", safe(url))
 }
 
 func FormatError(msg string) string {
@@ -115,12 +115,15 @@ func FormatError(msg string) string {
 
 func FormatConfirmation(description string, txType string, amount float64, category string) string {
 	kind := strings.ToLower(strings.TrimSpace(txType))
-	if kind == "" {
-		kind = "transaksi"
+	emoji := "💰"
+	if kind == "pemasukan" {
+		emoji = "💵"
+	} else if kind == "pengeluaran" {
+		emoji = "💸"
 	}
 	return fmt.Sprintf(
-		"🤔 Saya catat sebagai *%s*:\n📝 %s\n📂 %s\n💰 %s\n\nBenar? Ketik *ya* untuk konfirmasi atau *bukan* untuk membatalkan.",
-		kind, safe(description), safe(category), formatIDR(amount),
+		"🤔 *Konfirmasi Catatan* %s\n\nSaya catat sebagai *%s*:\n📝 %s\n📂 %s\n💰 %s\n\nBenar? Ketik *ya* atau *bukan*. 👌",
+		emoji, strings.Title(kind), safe(description), safe(category), formatIDR(amount),
 	)
 }
 

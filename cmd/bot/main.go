@@ -75,7 +75,7 @@ func main() {
 	notesService := notes.NewNotesService(repo)
 	messenger := whatsapp.NewWhatsAppClient(client)
 	var allRecipients []string
-	allRecipients = append(allRecipients, cfg.OwnerPhoneNumber...)
+	allRecipients = append(allRecipients, cfg.OwnerIDs...)
 	for _, gid := range cfg.AllowedGroupJIDs {
 		if !strings.Contains(gid, "@") {
 			allRecipients = append(allRecipients, gid+"@g.us")
@@ -117,7 +117,7 @@ func main() {
 	appRouter.SetRepo(repo) // needed for undo + dashboard refresh
 
 	// 10) WhatsApp message handler registration
-	handler := whatsapp.NewHandler(messenger, cfg.OwnerPhoneNumber, appRouter.HandleMessage, cfg.AllowedGroupJIDs...)
+	handler := whatsapp.NewHandler(messenger, cfg.OwnerIDs, appRouter.HandleMessage, cfg.AllowedGroupJIDs...)
 	handler.Register(client)
 
 	log.Println("✅ Bot is running! Waiting for messages...")

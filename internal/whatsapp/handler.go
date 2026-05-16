@@ -20,7 +20,7 @@ type Handler struct {
 
 func NewHandler(
 	m Messenger,
-	ownerNumbers []string,
+	ownerIDs []string,
 	onMessage func(ctx context.Context, sender string, text string) string,
 	allowedGroups ...string,
 ) *Handler {
@@ -35,8 +35,8 @@ func NewHandler(
 			groups[g] = true
 		}
 	}
-	owners := make(map[string]bool, len(ownerNumbers))
-	for _, o := range ownerNumbers {
+	owners := make(map[string]bool, len(ownerIDs))
+	for _, o := range ownerIDs {
 		o = strings.TrimSpace(o)
 		if o != "" {
 			owners[o] = true
@@ -90,6 +90,7 @@ func (h *Handler) handleMessage(ctx context.Context, evt *events.Message) {
 	} else {
 		// Personal chat: owner whitelist check.
 		if !h.ownerNumbers[evt.Info.Sender.User] {
+			log.Printf("🚫 [REJECTED] Unauthorized DM from: %s", evt.Info.Sender.User)
 			return
 		}
 		replyTo = evt.Info.Sender.User
