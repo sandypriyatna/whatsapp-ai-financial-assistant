@@ -39,6 +39,7 @@ func verifyLLMConnectivity(ctx context.Context, llmClient *ai.LLMClient) error {
 
 func main() {
 	// 1) Load config
+	log.Println("🚀 Satpam Rekening v1.1 Starting...")
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("❌ Config error: %v", err)
