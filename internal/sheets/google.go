@@ -326,6 +326,15 @@ func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName str
 	return out, nil
 }
 
+// ClearRange deletes values in the specified A1 range.
+func (r *GoogleSheetRepository) ClearRange(ctx context.Context, readRange string) error {
+	if r == nil {
+		return fmt.Errorf("repository is nil")
+	}
+	_, err := r.service.Spreadsheets.Values.Clear(r.spreadsheetID, readRange, &sheets.ClearValuesRequest{}).Context(ctx).Do()
+	return err
+}
+
 // GetTransactionByID finds a specific transaction in the monthly tab inferred from ID date.
 func (r *GoogleSheetRepository) GetTransactionByID(ctx context.Context, id string) (*Transaction, int, string, error) {
 	if r == nil {
