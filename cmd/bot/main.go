@@ -48,7 +48,7 @@ func main() {
 
 	// 2) Connect WhatsApp
 	waLogger := waLog.Stdout("WhatsApp", "ERROR", true)
-	client, err := whatsapp.Connect(cfg.WASessionDBPath, waLogger)
+	client, err := whatsapp.Connect(cfg.WASessionDBPath, cfg.PairingCodePhone, waLogger)
 	if err != nil {
 		log.Fatalf("❌ WhatsApp connection error: %v", err)
 	}

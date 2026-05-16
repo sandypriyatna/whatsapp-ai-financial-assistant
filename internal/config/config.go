@@ -19,6 +19,7 @@ type Config struct {
 	WASessionDBPath  string // WHATSAPP_SESSION_DB_PATH — required
 	OwnerIDs         []string // OWNER_IDS — required, comma-separated list of phone numbers or LIDs
 	AllowedGroupJIDs []string // ALLOWED_GROUP_JIDS — optional, comma-separated group JID user parts
+	PairingCodePhone string   // PAIRING_CODE_PHONE — optional, for linking via 8-digit code instead of QR
 }
 
 // Load reads configuration from .env/environment variables and validates them.
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		WASessionDBPath:  strings.TrimSpace(os.Getenv("WHATSAPP_SESSION_DB_PATH")),
 		OwnerIDs:         parseCommaSeparated(os.Getenv("OWNER_IDS")),
 		AllowedGroupJIDs: parseCommaSeparated(os.Getenv("ALLOWED_GROUP_JIDS")),
+		PairingCodePhone: strings.TrimSpace(os.Getenv("PAIRING_CODE_PHONE")),
 	}
 
 	if err := validate(cfg); err != nil {

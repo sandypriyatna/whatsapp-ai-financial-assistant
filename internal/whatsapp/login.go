@@ -27,7 +27,7 @@ func init() {
 // - Reuses existing session if present
 // - Shows QR in terminal for first-time login
 // - Enables auto-reconnect
-func Connect(dbPath string, log waLog.Logger) (*whatsmeow.Client, error) {
+func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.Client, error) {
 	if strings.TrimSpace(dbPath) == "" {
 		return nil, fmt.Errorf("dbPath is required")
 	}
@@ -59,8 +59,23 @@ func Connect(dbPath string, log waLog.Logger) (*whatsmeow.Client, error) {
 	client := whatsmeow.NewClient(deviceStore, log)
 	client.EnableAutoReconnect = true
 
-	// First-time login requires QR scan.
+	// First-time login requires QR scan or pairing code.
 	if client.Store.ID == nil {
+		if pairingPhone != "" {
+			if err := client.Connect(); err != nil {
+				return nil, fmt.Errorf("failed to connect for pairing: %w", err)
+			}
+			code, err := client.PairPhone(pairingPhone, true, whatsmeow.PairProtoHashTypeChrome, "Chrome (Linux)")
+			if err != nil {
+				return nil, fmt.Errorf("failed to get pairing code: %w", err)
+			}
+			fmt.Printf("\n🔑 PAIRING CODE: %s\n", code)
+			fmt.Println("Buka WhatsApp HP -> Settings -> Linked Devices -> Link with phone number instead")
+			fmt.Println("Masukkan kode di atas.")
+			fmt.Println("Menunggu pairing selesai...")
+			return client, nil
+		}
+
 		qrChan, err := client.GetQRChannel(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create QR channel: %w", err)
