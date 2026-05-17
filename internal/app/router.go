@@ -316,12 +316,12 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 		case "record_transaction":
 			var args ai.RecordTransactionArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data transaksi tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data transaksi", err, "Format data transaksi tidak valid. 😊"))
 				continue
 			}
 			result, budgetAlert, err := r.executeTransactionResult(ctx, sender, &args)
 			if err != nil {
-				responses = append(responses, formatter.FormatError("Gagal mencatat: "+err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mencatat transaksi", err, "Aduh, maaf ya, aku gagal mencatat transaksi kamu kali ini. Coba tulis lagi dengan format yang lebih sederhana ya! 😊"))
 				continue
 			}
 			txResults = append(txResults, result)
@@ -331,24 +331,17 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 
 		case "get_report":
 			if r.financeService == nil {
-				responses = append(responses, formatter.FormatError("Service laporan belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membuat laporan", fmt.Errorf("layanan laporan tidak tersedia"), "Layanan laporan belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			var args ai.GetReportArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data laporan tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data laporan", err, "Format data laporan tidak valid. 😊"))
 				continue
 			}
 			report, err := r.financeService.GenerateReport(ctx, args.Period)
 			if err != nil {
-				// Fallback to conversational explanation from Gemini!
-				fallbackPrompt := fmt.Sprintf("User meminta laporan dengan kata kunci/periode '%s', tetapi sistem mengembalikan error: %v. Tolong jelaskan kepada user dengan bahasa Indonesia yang sangat ramah, santai, gaul/friendly, dan nyambung (tanpa menyebutkan istilah teknis pemrograman, database, atau kata-kata 'Error: Gagal membuat laporan'), bahwa saat ini kamu baru mendukung laporan Harian (hari ini), Mingguan (7 hari terakhir), dan Bulanan (bulan berjalan). Berikan alternatif bantuan dengan menawarkan pembuatan laporan bulan ini.", args.Period, err)
-				resp, fallbackErr := r.llmClient.Chat(ctx, r.systemPrompt, fallbackPrompt)
-				if fallbackErr == nil && strings.TrimSpace(resp.Content) != "" {
-					responses = append(responses, resp.Content)
-				} else {
-					responses = append(responses, "Halo! Saat ini aku baru bisa membuat laporan Harian, Mingguan, dan Bulanan (bulan berjalan) nih. Laporan untuk periode yang kamu minta belum tersedia. Mau dibuatkan laporan yang mana? 😊")
-				}
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membuat laporan", err, "Halo! Saat ini aku baru bisa membuat laporan Harian, Mingguan, dan Bulanan (bulan berjalan) nih. Laporan untuk periode yang kamu minta belum tersedia. Mau dibuatkan laporan yang mana? 😊"))
 				continue
 			}
 			switch normalizeReportPeriod(args.Period, report.Period) {
@@ -362,16 +355,16 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 
 		case "set_budget":
 			if r.financeService == nil {
-				responses = append(responses, formatter.FormatError("Service budget belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mengatur budget", fmt.Errorf("layanan budget tidak tersedia"), "Layanan budget belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			var args ai.SetBudgetArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data budget tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data budget", err, "Format data budget tidak valid. 😊"))
 				continue
 			}
 			if err := r.financeService.SetBudget(ctx, args.Category, args.Amount); err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mengatur budget", err, "Maaf ya, aku belum berhasil mengatur budget kamu kali ini. Coba ulangi beberapa saat lagi ya! 😊"))
 				continue
 			}
 			responses = append(responses, formatter.FormatBudgetSet(args.Category, args.Amount))
@@ -379,74 +372,74 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 		case "save_note":
 			var args ai.SaveNoteArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data catatan tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data catatan", err, "Format data catatan tidak valid. 😊"))
 				continue
 			}
 			if r.reminderService != nil && isReminderIntent(args.Content) {
 				rem, err := r.reminderService.CreateFromText(ctx, sender, args.Content)
 				if err != nil {
-					responses = append(responses, formatter.FormatError("Gagal membuat reminder: "+err.Error()))
+					responses = append(responses, r.conversationalErrorFallback(ctx, "membuat pengingat", err, "Gagal membuat pengingat kamu kali ini. Coba ulangi dengan format waktu yang lebih jelas ya! 😊"))
 					continue
 				}
 				responses = append(responses, formatReminderCreatedMessage(rem))
 				continue
 			}
 			if r.notesService == nil {
-				responses = append(responses, formatter.FormatError("Service catatan belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "menyimpan catatan", fmt.Errorf("layanan catatan tidak tersedia"), "Layanan catatan belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			if err := r.notesService.SaveNote(ctx, args.Content); err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "menyimpan catatan", err, "Maaf ya, catatan kamu gagal disimpan kali ini. Coba beberapa saat lagi ya! 😊"))
 				continue
 			}
 			responses = append(responses, formatter.FormatNoteSaved(args.Content))
 
 		case "edit_transaction":
 			if r.financeService == nil {
-				responses = append(responses, formatter.FormatError("Service edit belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mengedit transaksi", fmt.Errorf("layanan edit tidak tersedia"), "Layanan edit belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			var args ai.EditTransactionArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data edit tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data edit", err, "Format data edit tidak valid. 😊"))
 				continue
 			}
 			_, err := r.financeService.EditTransaction(ctx, args.ID, args.Field, args.Value)
 			if err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mengedit transaksi", err, "Maaf ya, transaksi tersebut belum bisa diedit. Pastikan ID transaksi dan kolomnya sudah benar ya! 😊"))
 				continue
 			}
 			responses = append(responses, formatter.FormatTransactionEdited(args.ID, args.Field, "", args.Value))
 
 		case "delete_transaction":
 			if r.financeService == nil {
-				responses = append(responses, formatter.FormatError("Service hapus belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "menghapus transaksi", fmt.Errorf("layanan hapus tidak tersedia"), "Layanan hapus belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			var args ai.DeleteTransactionArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data hapus tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data hapus", err, "Format data hapus tidak valid. 😊"))
 				continue
 			}
 			if err := r.financeService.DeleteTransaction(ctx, args.ID); err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "menghapus transaksi", err, "Maaf ya, transaksi tersebut gagal dihapus. Pastikan ID transaksi benar ya! 😊"))
 				continue
 			}
 			responses = append(responses, formatter.FormatTransactionDeleted(args.ID))
 
 		case "search_transactions":
 			if r.financeService == nil {
-				responses = append(responses, formatter.FormatError("Service pencarian belum siap."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mencari transaksi", fmt.Errorf("layanan pencarian tidak tersedia"), "Layanan pencarian belum siap nih, ditunggu sebentar ya! 😊"))
 				continue
 			}
 			var args ai.SearchTransactionArgs
 			if err := json.Unmarshal(call.Arguments, &args); err != nil {
-				responses = append(responses, formatter.FormatError("Format data pencarian tidak valid."))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "membaca data pencarian", err, "Format data pencarian tidak valid. 😊"))
 				continue
 			}
 			result, err := r.financeService.SearchTransactions(ctx, &args)
 			if err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				responses = append(responses, r.conversationalErrorFallback(ctx, "mencari transaksi", err, "Waduh, pencarian transaksinya sedang mengalami kendala. Coba cari dengan kata kunci lain ya! 😊"))
 				continue
 			}
 			responses = append(responses, result)
@@ -668,4 +661,23 @@ func normalizeReportPeriod(raw string, fallback string) string {
 	default:
 		return "daily"
 	}
+}
+
+func (r *AppRouter) conversationalErrorFallback(ctx context.Context, action string, err error, defaultMsg string) string {
+	if r == nil || r.llmClient == nil {
+		return defaultMsg
+	}
+
+	fallbackPrompt := fmt.Sprintf(
+		"User mencoba melakukan tindakan '%s', tetapi sistem mengalami kendala/error: %v. "+
+			"Tolong jelaskan kepada user dengan bahasa Indonesia yang sangat ramah, santai, gaul/friendly, dan nyambung (tanpa menyebutkan istilah teknis pemrograman, database, atau kata-kata 'Error: Gagal...'), "+
+			"bahwa saat ini tindakan tersebut belum bisa diselesaikan karena kendala tersebut. Berikan alternatif bantuan atau tawarkan solusi alternatif yang bersahabat.",
+		action, err,
+	)
+
+	resp, chatErr := r.llmClient.Chat(ctx, r.systemPrompt, fallbackPrompt)
+	if chatErr == nil && strings.TrimSpace(resp.Content) != "" {
+		return resp.Content
+	}
+	return defaultMsg
 }
