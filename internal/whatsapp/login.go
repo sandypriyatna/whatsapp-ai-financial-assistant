@@ -45,7 +45,7 @@ func Connect(dbPath string, pairingPhone string, log waLog.Logger) (*whatsmeow.C
 	container, err := sqlstore.New(
 		ctx,
 		"sqlite3",
-		"file:"+dbPath+"?_pragma=foreign_keys(1)&_busy_timeout=5000",
+		"file:"+dbPath+"?_pragma=foreign_keys(1)&_busy_timeout=10000&_journal_mode=WAL",
 		log,
 	)
 	if err != nil {
