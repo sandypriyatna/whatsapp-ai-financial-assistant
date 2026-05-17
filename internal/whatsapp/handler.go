@@ -104,13 +104,21 @@ func (h *Handler) handleMessage(ctx context.Context, evt *events.Message) {
 
 	// Run callback with the REPLY TARGET as sender so reminders
 	// and other services correctly address the group/DM.
+	log.Printf("🤖 [AI] Processing message with router for sender: %s...", replyTo)
 	response := strings.TrimSpace(h.onMessage(ctx, replyTo, text))
 	if response == "" {
+		log.Printf("⚠️ [AI] Router returned an empty response for message: %q", text)
 		return
 	}
 
+	log.Printf("🤖 [AI] Response generated: %q", response)
+
 	// Send response with typing presence.
-	_ = sendTextWithPresenceToJID(ctx, h.messenger, replyTo, response)
+	if err := sendTextWithPresenceToJID(ctx, h.messenger, replyTo, response); err != nil {
+		log.Printf("❌ [SEND_FAIL] Failed to send response to %s: %v", replyTo, err)
+	} else {
+		log.Printf("📤 [SENT] Message successfully dispatched to %s", replyTo)
+	}
 }
 
 // sendTextWithPresenceToJID handles both personal JIDs and group JIDs.
