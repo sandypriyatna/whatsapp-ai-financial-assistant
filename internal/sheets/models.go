@@ -60,7 +60,22 @@ func TransactionFromRow(row []interface{}) (*Transaction, error) {
 		return nil, fmt.Errorf("invalid amount at column 7: %w", err)
 	}
 
-	dt, err := time.ParseInLocation("02/01/2006 15:04", strings.TrimSpace(dateStr)+" "+strings.TrimSpace(timeStr), WIB)
+	var dt time.Time
+	dt, err = time.ParseInLocation("02/01/2006 15:04", strings.TrimSpace(dateStr)+" "+strings.TrimSpace(timeStr), WIB)
+	if err != nil {
+		// Fallback: Check if dateStr is a numeric serial date (Google Sheets/Excel format)
+		if serialDays, parseErr := strconv.Atoi(strings.TrimSpace(dateStr)); parseErr == nil {
+			// Google Sheets base date is Dec 30, 1899
+			baseDate := time.Date(1899, 12, 30, 0, 0, 0, 0, WIB)
+			dt = baseDate.AddDate(0, 0, serialDays)
+			
+			// Parse fractional day from timeStr if it is a decimal time
+			if serialTime, parseTimeErr := strconv.ParseFloat(strings.TrimSpace(timeStr), 64); parseTimeErr == nil {
+				dt = dt.Add(time.Duration(serialTime * 24 * float64(time.Hour)))
+			}
+			err = nil // resolved
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("invalid date/time: %w", err)
 	}

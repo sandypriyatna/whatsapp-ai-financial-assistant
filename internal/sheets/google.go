@@ -311,6 +311,154 @@ func (r *GoogleSheetRepository) AppendTransaction(ctx context.Context, tx *Trans
 	return nil
 }
 
+// ClearTab clears all data in a given tab starting from row 2 (preserving header).
+func (r *GoogleSheetRepository) ClearTab(ctx context.Context, tabName string) error {
+	if r == nil {
+		return fmt.Errorf("repository is nil")
+	}
+	if r.service == nil {
+		return fmt.Errorf("sheets service is nil")
+	}
+	tabName = strings.TrimSpace(tabName)
+	if tabName == "" {
+		return fmt.Errorf("tab name is required")
+	}
+
+	clearRange := fmt.Sprintf("'%s'!A2:G", tabName)
+	err := r.withRetry(ctx, func() error {
+		_, e := r.service.Spreadsheets.Values.Clear(r.spreadsheetID, clearRange, &sheets.ClearValuesRequest{}).Context(ctx).Do()
+		return e
+	})
+	if err != nil {
+		return fmt.Errorf("failed to clear tab %s: %w", tabName, err)
+	}
+	
+	// Invalidate local transaction cache
+	r.cacheMu.Lock()
+	if r.txCache != nil {
+		delete(r.txCache, tabName)
+		delete(r.txCacheTime, tabName)
+	}
+	r.cacheMu.Unlock()
+	return nil
+}
+
+// AppendTransactionsBatch appends a batch of transactions to a tab in a single write.
+func (r *GoogleSheetRepository) AppendTransactionsBatch(ctx context.Context, tabName string, txs []*Transaction) error {
+	if r == nil {
+		return fmt.Errorf("repository is nil")
+	}
+	if r.service == nil {
+		return fmt.Errorf("sheets service is nil")
+	}
+	if len(txs) == 0 {
+		return nil
+	}
+	
+	if err := r.EnsureTabExists(ctx, tabName); err != nil {
+		return fmt.Errorf("failed to ensure tab %q: %w", tabName, err)
+	}
+	
+	r.txMu.Lock()
+	defer r.txMu.Unlock()
+	
+	// Calculate starting daily counters for each date prefix in the batch
+	dailyCounters := make(map[string]int)
+	
+	// Read existing transactions to find the starting max counter for each date prefix
+	existing, err := r.GetTransactions(ctx, tabName)
+	if err == nil {
+		for _, tx := range existing {
+			for _, newTx := range txs {
+				datePrefix := newTx.Date.In(WIB).Format("20060102")
+				if counter, ok := parseDailyCounter(tx.ID, datePrefix); ok {
+					if counter > dailyCounters[datePrefix] {
+						dailyCounters[datePrefix] = counter
+					}
+				}
+			}
+		}
+	}
+	
+	var rows [][]interface{}
+	for _, tx := range txs {
+		datePrefix := tx.Date.In(WIB).Format("20060102")
+		dailyCounters[datePrefix]++
+		tx.ID = fmt.Sprintf("%s-%03d", datePrefix, dailyCounters[datePrefix])
+		rows = append(rows, tx.ToRow())
+	}
+	
+	valueRange := &sheets.ValueRange{
+		Values: rows,
+	}
+	appendRange := fmt.Sprintf("'%s'!A:G", tabName)
+	
+	err = r.withRetry(ctx, func() error {
+		_, e := r.service.Spreadsheets.Values.
+			Append(r.spreadsheetID, appendRange, valueRange).
+			ValueInputOption("USER_ENTERED").
+			InsertDataOption("INSERT_ROWS").
+			Context(ctx).
+			Do()
+		return e
+	})
+	if err != nil {
+		return fmt.Errorf("batch append failed: %w", err)
+	}
+	
+	// Post-append: auto-sort and format headers (best-effort)
+	if sheetID, tabErr := r.tabManager.GetTabID(ctx, tabName); tabErr == nil {
+		sortReq := &sheets.BatchUpdateSpreadsheetRequest{
+			Requests: []*sheets.Request{
+				{
+					SetBasicFilter: &sheets.SetBasicFilterRequest{
+						Filter: &sheets.BasicFilter{
+							Range: &sheets.GridRange{
+								SheetId:          sheetID,
+								StartRowIndex:    0,
+								EndRowIndex:      1000,
+								StartColumnIndex: 0,
+								EndColumnIndex:   7,
+							},
+						},
+					},
+				},
+				{
+					SortRange: &sheets.SortRangeRequest{
+						Range: &sheets.GridRange{
+							SheetId:          sheetID,
+							StartRowIndex:    1,
+							EndRowIndex:      1000,
+							StartColumnIndex: 0,
+							EndColumnIndex:   7,
+						},
+						SortSpecs: []*sheets.SortSpec{
+							{
+								DimensionIndex: 1, // Column B = Tanggal
+								SortOrder:      "ASCENDING",
+							},
+						},
+					},
+				},
+			},
+		}
+		_ = r.withRetry(ctx, func() error {
+			_, e := r.service.Spreadsheets.BatchUpdate(r.spreadsheetID, sortReq).Context(ctx).Do()
+			return e
+		})
+	}
+	
+	// Invalidate local transaction cache
+	r.cacheMu.Lock()
+	if r.txCache != nil {
+		delete(r.txCache, tabName)
+		delete(r.txCacheTime, tabName)
+	}
+	r.cacheMu.Unlock()
+	
+	return nil
+}
+
 // GetTransactions reads all transactions for a date range/tab.
 func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName string) ([]Transaction, error) {
 	if r == nil {
@@ -344,7 +492,9 @@ func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName str
 	}
 
 	readRange := fmt.Sprintf("'%s'!A2:G", tabName)
-	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, readRange).Context(ctx).Do()
+	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, readRange).
+		ValueRenderOption("FORMATTED_VALUE").
+		Context(ctx).Do()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read transactions from %s: %w", tabName, err)
 	}
