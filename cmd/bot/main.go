@@ -44,6 +44,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Config error: %v", err)
 	}
+	log.Printf("👥 Loaded OWNER_IDS: %v", cfg.OwnerIDs)
 	log.Println("✅ Config loaded")
 
 	// 2) Connect WhatsApp
