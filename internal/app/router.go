@@ -341,7 +341,14 @@ func (r *AppRouter) handleToolCalls(ctx context.Context, sender string, calls []
 			}
 			report, err := r.financeService.GenerateReport(ctx, args.Period)
 			if err != nil {
-				responses = append(responses, formatter.FormatError(err.Error()))
+				// Fallback to conversational explanation from Gemini!
+				fallbackPrompt := fmt.Sprintf("User meminta laporan dengan kata kunci/periode '%s', tetapi sistem mengembalikan error: %v. Tolong jelaskan kepada user dengan bahasa Indonesia yang sangat ramah, santai, gaul/friendly, dan nyambung (tanpa menyebutkan istilah teknis pemrograman, database, atau kata-kata 'Error: Gagal membuat laporan'), bahwa saat ini kamu baru mendukung laporan Harian (hari ini), Mingguan (7 hari terakhir), dan Bulanan (bulan berjalan). Berikan alternatif bantuan dengan menawarkan pembuatan laporan bulan ini.", args.Period, err)
+				resp, fallbackErr := r.llmClient.Chat(ctx, r.systemPrompt, fallbackPrompt)
+				if fallbackErr == nil && strings.TrimSpace(resp.Content) != "" {
+					responses = append(responses, resp.Content)
+				} else {
+					responses = append(responses, "Halo! Saat ini aku baru bisa membuat laporan Harian, Mingguan, dan Bulanan (bulan berjalan) nih. Laporan untuk periode yang kamu minta belum tersedia. Mau dibuatkan laporan yang mana? 😊")
+				}
 				continue
 			}
 			switch normalizeReportPeriod(args.Period, report.Period) {
