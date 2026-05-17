@@ -205,8 +205,19 @@ func cellFloat64(v interface{}) (float64, error) {
 			} else if strings.Count(s, ".") > 1 {
 				s = strings.ReplaceAll(s, ".", "")
 			} else if strings.Contains(s, ",") {
-				// Single comma: treat as decimal point for ID context
-				s = strings.ReplaceAll(s, ",", ".")
+				// Single comma: If followed by exactly 3 digits, it's a thousands separator (e.g. "22,000")
+				// Otherwise, it's a decimal point in ID format (e.g. "22,5")
+				if strings.Index(s, ",") == len(s)-4 {
+					s = strings.ReplaceAll(s, ",", "")
+				} else {
+					s = strings.ReplaceAll(s, ",", ".")
+				}
+			} else if strings.Contains(s, ".") {
+				// Single dot: If followed by exactly 3 digits, it's a thousands separator in ID format (e.g. "22.000")
+				// Otherwise, it's a decimal point in US format (e.g. "22.5")
+				if strings.Index(s, ".") == len(s)-4 {
+					s = strings.ReplaceAll(s, ".", "")
+				}
 			}
 		}
 

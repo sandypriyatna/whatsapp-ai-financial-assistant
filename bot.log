@@ -1,25 +1,86 @@
-2026/05/17 03:24:32 ✅ Config loaded
-2026/05/17 03:24:32 ✅ WhatsApp connected
-2026/05/17 03:24:32 ✅ Google Sheets connected
-2026/05/17 03:24:32 🔧 Menginisialisasi struktur spreadsheet...
-2026/05/17 03:24:32   ➜ Hapus tab default Sheet1 (jika spreadsheet baru)...
-2026/05/17 03:24:33   ✅ Hapus tab default Sheet1 (jika spreadsheet baru)
-2026/05/17 03:24:33   ➜ Pastikan tab bulan ini ada: Mei 2026...
-2026/05/17 03:24:33   ✅ Pastikan tab bulan ini ada: Mei 2026
-2026/05/17 03:24:33   ➜ Inisialisasi tab Budget...
-2026/05/17 03:24:34   ✅ Inisialisasi tab Budget
-2026/05/17 03:24:34   ➜ Inisialisasi tab Notes...
-2026/05/17 03:24:34   ✅ Inisialisasi tab Notes
-2026/05/17 03:24:34   ➜ Inisialisasi tab Reminders...
-2026/05/17 03:24:34   ✅ Inisialisasi tab Reminders
-2026/05/17 03:24:34   ➜ Inisialisasi Dashboard (skip jika sudah ada)...
-2026/05/17 03:24:34   ✅ Inisialisasi Dashboard (skip jika sudah ada)
-2026/05/17 03:24:34   ➜ Terapkan zebra banding ke tab yang sudah ada (patch one-time)...
-2026/05/17 03:24:35   ✅ Terapkan zebra banding ke tab yang sudah ada (patch one-time)
-2026/05/17 03:24:35   ➜ Atur urutan tab: Dashboard → Bulan Ini → Budget → Notes → Reminders...
-2026/05/17 03:24:36   ✅ Atur urutan tab: Dashboard → Bulan Ini → Budget → Notes → Reminders
-2026/05/17 03:24:36 ✅ Sheets tabs initialized
-2026/05/17 03:24:36 ✅ LLM preflight check passed
-2026/05/17 03:24:36 ✅ Reminder scheduler started
-2026/05/17 03:24:36 ✅ Bot is running! Waiting for messages...
-03:25:31.817[31m [WhatsApp/Socket ERROR] Error reading from websocket: failed to get reader: failed to read frame header: EOF[0m
+2026/05/17 20:07:30 🚀 Satpam Rekening v1.1 Starting...
+2026/05/17 20:07:30 ✅ Config loaded
+📱 SCAN QR CODE BERIKUT (Atau gunakan Pairing Code di atas):
+█████████████████████████████████████████████████████████████████
+█████████████████████████████████████████████████████████████████
+████ ▄▄▄▄▄ ██▀█▄█ █▄  ▀█▄█▄▄▄ ▄ ▄ ▄█   ██▄▄▀▀ ▄  █▄ ██ ▄▄▄▄▄ ████
+████ █   █ █▄ ███▄▄▄██▄▀██████▄▄████▄▄ ▄▄▀  █▀█▄▄▀▄ ██ █   █ ████
+████ █▄▄▄█ ██▀██ ███▄▀▀ ▀▄▀█▄▀ ▄▄▄ ▀▄▄▄ ▄ ▄█ ▄▄▀▄ ▀▄██ █▄▄▄█ ████
+████▄▄▄▄▄▄▄█ █ ▀ █ ▀▄▀▄█ █▄▀▄▀ █▄█ █▄█ █ █▄█ █▄█ █ █ █▄▄▄▄▄▄▄████
+████   ▀▄ ▄▄▄  █▀▄ ██  ██ ▄██   ▄ ▄█▄ ▄▀▄█▄▄▄█▄█▄▄██▄▄▄▀█▀▄██████
+█████▄▄█▀ ▄▀▀▀█▀▄ ▀ ▄█▄█  ▀██▄█ ▄▄▀█ ▀▄▀▀ ▄██▄▄█ ▄█▄  █▄▄██  ████
+█████▀▄▀█▀▄ █▄ ▀  ████▄█▄ ██▄█▄▄ █▀ ▄▄▄▄▄██ ▄ █   █ █▄▄  ▀▄▀▀████
+████ █▀▄▄▀▄▀▀█▄ ██ ▀▀▀▄▄▀▀▀▀▀█▄ ▄▀ ▀▀ ▄▀▀▀▄██ █▀ ▄▀▀█▄█  ▀█  ████
+█████ ▀  █▄▀▄ █ █▄▄▀█▄ █▄▄▄ █▀▄ ▀▄█ ▄ █  ▄▄▄ ██  ▄████▄ ▄▄█▄ ████
+████▀█▄▄██▄▀▄▄██▀█▄  ▀ █▄█▄▄▄▄█▄▀█ █▀ ▀▀ ▀▀ █▄▄▄▀█▀▄ ▀▄▀ ██ ▄████
+████▄▄█▄▄▀▄ ▀ ████▄█ ▄  ▄  █ ▄    █▄▄██  ▀▄▄▄▄▄▀ █▄ █▄█ ▄ ▀█▀████
+█████▀▄▄▀▄▄  ▀  ▄▀▄█▀▀  ▄█ █▀█▀▀  ▀▀▄█▀█ ▀█ █▄▄▀▀▀▀▄█ ▄█▄▄▄█▄████
+████▀   █▄▄▀▀ ▄▀ ▄▄▄▄▄▄▀█▄▄██▀ ▄▄▄▄ ▀█▀▀ ▄▄▄ ▄▄▄▄███▄█▄▄ ▀▄ ▀████
+████ ▄ ▀ ▄▄▄ ▀█▄█     ▀▄ █▄  ▄ ▄▄▄  ▀█▄▄ ▀ ▄███▀▄ ▄  ▄▄▄ █▄▄ ████
+████▀█ ▀ █▄█ █ ▄▀▀██▄ ████▄▄██ █▄█ ▄▄▄▄▄▄▄█▄▄██▄▄▄█  █▄█ ▄▄▀█████
+████ ▄█▀ ▄▄▄▄█▀▀█▄▀▀ ▄▄▀▄▀▄██ ▄▄▄ ▄█▀█▀█▀█▀  ██▀▀██▀     ▄█  ████
+█████▀ ▄▀ ▄   ▀  ▄▀█▄ ▄ ██ █▄▀▀ ██▄▄  ▄ ▄▄█  █▄▄ ███▀▀ █▄ █▀▀████
+████▄█▄ ██▄▀█▀█▄ ▀ ▀▀▀▄▄▀▄██ ▄ █▀█▄▄██▀▄▀ ▀   █ ▀▀▀  █ ▄▀ █ ▄████
+█████▄ ▄▀█▄ ▀▀▄█▄▀  ▄▄▄█ ▄▄ ▄▀  ▄▄ ▄▄▀██▄▄█▄ ██▄▄ █▀█ ▄▄█ █▀▀████
+████▄▀ ▄▄█▄▀  ██▄▀▄ ▄▄ █▀█▄ ▄ █ ▄▄ ██ █▄▄ ▄  ▄██▀ ██    ▄▄▄ █████
+████▄▄▄ ██▄█ █  ▄▀▄█▄ ▄ ██ █▄▀  █  █▄ ▄▄ ███  ▄█ ▄█▀ ▀▄ █▀▀▀ ████
+████ ██▄▀▀▄▄▄▀ ▀▀▀▀▄ █▄▀  ▀█ █ █▄ ▄█▄▄ ▀▄▀▄█▄▄▀██▀▄    ▀ ▄▄▄ ████
+█████ ▄  █▄▀▀ ▄▄ ▀▀ ██▄ █ █▄█▀▀▄█▀█ ▄▄▄ ▄ ▄▄ ██▄  ███▄█▀█▀█▄ ████
+████ ▀ ▀▀▄▄ ▄▄ █ ██▀▀█   █▄▄▀▀█▄▄▄▄▀▀▄▀   █▄  ▀▀ ▄▀█  ▄▀█▄█  ████
+██████████▄▄ ▄▄▄▄ █▄█▄ ▀█▄ █▄█ ▄▄▄ █▄▀▄▄ ▄█▀ ▄▄▀ ▀██ ▄▄▄  ▄▄ ████
+████ ▄▄▄▄▄ █ ██ █  ██▀▀▄▄▀  ▀▀ █▄█    █▀█▀   ▄█   ▀▀ █▄█ ▄▄▀▄████
+████ █   █ █▄▄▄█▀█ █ ▄▄ ▄█ █     ▄    ▄ ▄▄▄▄  ▄▄▄▄▄▄▄    █▄▀▄████
+████ █▄▄▄█ █ ▀▄▄▀▀██▀▄█ ▄▀▄█▀█▄▄ █▀▀▄▄▀▄ █ █▄ █▀ █▀▄ █▄▀ ▀▄▀▄████
+████▄▄▄▄▄▄▄█▄██▄██▄█▄▄▄▄██▄█▄▄▄█▄█▄▄████▄█▄▄▄▄▄▄▄██████▄▄▄█▄▄████
+█████████████████████████████████████████████████████████████████
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+Jika QR terpotong (mode SSH/headless), gunakan teks berikut:
+→ Salin teks di bawah ke https://qr.io (pilih 'Text') lalu scan dari HP:
+
+2@Yf/FSPioB73c1ij0W6nsgmL2Ka4E2aQUmriQpKGsn7KKmKLE9JP1u/4I0uCvzI/p8hr7sR+TpmCEMOfn6/niBTyv6oZQosKlrfc=,5/xlO6EudtE2ovzFqmR90oHbpZZ8JafzFfs1H0ar8lg=,k9cYBxURu7UXRH+YDIygZn18Yhy9HT2qCYaLIfmCQ08=,hbWMMIQgsWkjYAd1pdDkQMozSNk1a4Ue1S/ItQBL3V8=
+
+Menunggu scan QR di WhatsApp (Settings → Linked Devices → Link a Device)...
+✅ Pairing berhasil.
+2026/05/17 20:08:31 ✅ WhatsApp connected
+2026/05/17 20:08:31 ✅ Google Sheets connected
+2026/05/17 20:08:31 🔧 Menginisialisasi struktur spreadsheet...
+2026/05/17 20:08:31   ➜ Hapus tab default Sheet1 (jika spreadsheet baru)...
+2026/05/17 20:08:31   ✅ Hapus tab default Sheet1 (jika spreadsheet baru)
+2026/05/17 20:08:31   ➜ Pastikan tab bulan ini ada: Mei 2026...
+2026/05/17 20:08:32   ✅ Pastikan tab bulan ini ada: Mei 2026
+2026/05/17 20:08:32   ➜ Inisialisasi tab Budget...
+2026/05/17 20:08:32   ✅ Inisialisasi tab Budget
+2026/05/17 20:08:32   ➜ Inisialisasi tab Notes...
+2026/05/17 20:08:32   ✅ Inisialisasi tab Notes
+2026/05/17 20:08:32   ➜ Inisialisasi tab Reminders...
+2026/05/17 20:08:33   ✅ Inisialisasi tab Reminders
+2026/05/17 20:08:33   ➜ Inisialisasi Dashboard (skip jika sudah ada)...
+2026/05/17 20:08:33   ✅ Inisialisasi Dashboard (skip jika sudah ada)
+2026/05/17 20:08:33   ➜ Terapkan zebra banding ke tab yang sudah ada (patch one-time)...
+2026/05/17 20:08:33   ✅ Terapkan zebra banding ke tab yang sudah ada (patch one-time)
+2026/05/17 20:08:33   ➜ Atur urutan tab: Dashboard → Bulan Ini → Budget → Notes → Reminders...
+2026/05/17 20:08:34   ✅ Atur urutan tab: Dashboard → Bulan Ini → Budget → Notes → Reminders
+2026/05/17 20:08:34 ✅ Sheets tabs initialized
+2026/05/17 20:08:34 ⚠️ LLM preflight check failed: LLM connectivity check failed: llm request returned status 404: [{
+  "error": {
+    "code": 404,
+    "message": "models/gemini-1.5-flash is not found for API version v1main, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.",
+    "status": "NOT_FOUND"
+  }
+}
+]. Bot tetap berjalan tanpa fitur AI.
+2026/05/17 20:08:34 ✅ Reminder scheduler started
+2026/05/17 20:08:34 ✅ Bot is running! Waiting for messages...
+20:08:34.641[31m [WhatsApp ERROR] Failed to migrate signal store from 6285157300990@s.whatsapp.net to 15634100412527@lid: transaction: commit: database is locked (5) (SQLITE_BUSY)[0m
+2026/05/17 20:08:34 📩 [DM] Sender: 6285157300990 | Text: 
+2026/05/17 20:08:34 🚫 [REJECTED] Unauthorized DM from: 6285157300990
+2026/05/17 20:08:34 📩 [DM] Sender: 6285157300990 | Text: 
+2026/05/17 20:08:34 🚫 [REJECTED] Unauthorized DM from: 6285157300990
+2026/05/17 20:08:35 📩 [DM] Sender: 6285157300990 | Text: 
+2026/05/17 20:08:35 🚫 [REJECTED] Unauthorized DM from: 6285157300990
+20:08:36.895[31m [WhatsApp ERROR] Failed to sync app state after notification: failed to decode app state critical_block patches: failed to get key 00000000B9E9 to verify patch v1 MACs: didn't find app state key[0m
+20:08:37.201[31m [WhatsApp ERROR] Failed to sync app state after notification: failed to decode app state critical_unblock_low patches: failed to get key 00000000B9E9 to verify patch v1 MACs: didn't find app state key[0m
+2026/05/17 20:08:37 📩 [DM] Sender: 6285157300990 | Text: 
+2026/05/17 20:08:37 🚫 [REJECTED] Unauthorized DM from: 6285157300990
+20:10:09.748[31m [WhatsApp/Socket ERROR] Error reading from websocket: failed to get reader: failed to read frame header: EOF[0m

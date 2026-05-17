@@ -32,7 +32,12 @@ type GoogleSheetRepository struct {
 	txCacheTime     map[string]time.Time
 }
 
-var _ SheetRepository = (*GoogleSheetRepository)(nil)
+func (r *GoogleSheetRepository) GetService() *sheets.Service {
+	if r == nil {
+		return nil
+	}
+	return r.service
+}
 
 func NewGoogleSheetRepository(credsPath, credsJSON, spreadsheetID string) (*GoogleSheetRepository, error) {
 	ctx := context.Background()
@@ -459,6 +464,409 @@ func (r *GoogleSheetRepository) AppendTransactionsBatch(ctx context.Context, tab
 	return nil
 }
 
+// FormatFont applies premium formatting to any tab (Monthly transactions, Budget, Notes, Reminders):
+// - Header (row 1): Bold, White text, dark professional grey template background (#434343), middle/center aligned.
+// - Zebra banding: alternating between White and Light Grey (#F2F2F2) for crisp readability.
+// - Data rows (row 2+): Roboto 10pt, pure Black text color.
+// - Date & Time & Rupiah Column Formats: dynamically applied per sheet layout.
+// - Columns: exact fixed standard template widths.
+func (r *GoogleSheetRepository) FormatFont(ctx context.Context, tabName string) error {
+	if r == nil {
+		return fmt.Errorf("repository is nil")
+	}
+	if r.service == nil {
+		return fmt.Errorf("sheets service is nil")
+	}
+	if strings.EqualFold(tabName, "Dashboard") {
+		return nil
+	}
+
+	sheetID, err := r.tabManager.GetTabID(ctx, tabName)
+	if err != nil {
+		return fmt.Errorf("failed to get tab ID for %s: %w", tabName, err)
+	}
+
+	// 1. Fetch current spreadsheet to find and delete any existing banding styles on this tab
+	spreadsheet, err := r.service.Spreadsheets.Get(r.spreadsheetID).Context(ctx).Do()
+	if err == nil {
+		var deleteRequests []*sheets.Request
+		for _, sheet := range spreadsheet.Sheets {
+			if sheet.Properties.SheetId == int64(sheetID) {
+				for _, banding := range sheet.BandedRanges {
+					deleteRequests = append(deleteRequests, &sheets.Request{
+						DeleteBanding: &sheets.DeleteBandingRequest{
+							BandedRangeId: banding.BandedRangeId,
+						},
+					})
+				}
+			}
+		}
+		if len(deleteRequests) > 0 {
+			_ = r.withRetry(ctx, func() error {
+				_, e := r.service.Spreadsheets.BatchUpdate(r.spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{
+					Requests: deleteRequests,
+				}).Context(ctx).Do()
+				return e
+			})
+		}
+	}
+
+	// 2. Define layout configuration dynamically based on the tabName
+	var colCount int64
+	var colWidths []int64
+	var customRequests []*sheets.Request
+
+	switch tabName {
+	case "Budget":
+		colCount = 5
+		colWidths = []int64{320, 497, 327, 279, 222}
+		// Budget, Terpakai, Sisa columns (B, C, D / index 1, 2, 3) as Rupiah right-aligned
+		customRequests = append(customRequests, &sheets.Request{
+			RepeatCell: &sheets.RepeatCellRequest{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    1,
+					EndRowIndex:      1000,
+					StartColumnIndex: 1,
+					EndColumnIndex:   4,
+				},
+				Cell: &sheets.CellData{
+					UserEnteredFormat: &sheets.CellFormat{
+						NumberFormat: &sheets.NumberFormat{
+							Type:    "NUMBER",
+							Pattern: "\"Rp\" #,##0",
+						},
+						HorizontalAlignment: "RIGHT",
+					},
+				},
+				Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+			},
+		})
+
+	case "Notes":
+		colCount = 3
+		colWidths = []int64{302, 338, 1005}
+		// Tanggal column (B / index 1) as DATE centered
+		customRequests = append(customRequests, &sheets.Request{
+			RepeatCell: &sheets.RepeatCellRequest{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    1,
+					EndRowIndex:      1000,
+					StartColumnIndex: 1,
+					EndColumnIndex:   2,
+				},
+				Cell: &sheets.CellData{
+					UserEnteredFormat: &sheets.CellFormat{
+						NumberFormat: &sheets.NumberFormat{
+							Type:    "DATE",
+							Pattern: "dd/mm/yyyy",
+						},
+						HorizontalAlignment: "CENTER",
+					},
+				},
+				Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+			},
+		})
+
+	case ReminderSheetName: // "Reminders"
+		colCount = 13 // 12 visible columns + 1 hidden Target JID column
+		colWidths = []int64{109, 134, 135, 279, 85, 134, 86, 133, 123, 136, 126, 159, 100}
+		// TargetDate (B / 1), CreatedDate (H / 7), ModifiedDate (J / 9) as DATE centered
+		for _, colIdx := range []int64{1, 7, 9} {
+			customRequests = append(customRequests, &sheets.Request{
+				RepeatCell: &sheets.RepeatCellRequest{
+					Range: &sheets.GridRange{
+						SheetId:          sheetID,
+						StartRowIndex:    1,
+						EndRowIndex:      1000,
+						StartColumnIndex: colIdx,
+						EndColumnIndex:   colIdx + 1,
+					},
+					Cell: &sheets.CellData{
+						UserEnteredFormat: &sheets.CellFormat{
+							NumberFormat: &sheets.NumberFormat{
+								Type:    "DATE",
+								Pattern: "dd/mm/yyyy",
+							},
+							HorizontalAlignment: "CENTER",
+						},
+					},
+					Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+				},
+			})
+		}
+		// TargetTime (C / 2), CreatedTime (I / 8), ModifiedTime (K / 10) as TEXT centered
+		for _, colIdx := range []int64{2, 8, 10} {
+			customRequests = append(customRequests, &sheets.Request{
+				RepeatCell: &sheets.RepeatCellRequest{
+					Range: &sheets.GridRange{
+						SheetId:          sheetID,
+						StartRowIndex:    1,
+						EndRowIndex:      1000,
+						StartColumnIndex: colIdx,
+						EndColumnIndex:   colIdx + 1,
+					},
+					Cell: &sheets.CellData{
+						UserEnteredFormat: &sheets.CellFormat{
+							NumberFormat: &sheets.NumberFormat{
+								Type: "TEXT",
+							},
+							HorizontalAlignment: "CENTER",
+						},
+					},
+					Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+				},
+			})
+		}
+		// Hide Column M (index 12, Target JID)
+		customRequests = append(customRequests, &sheets.Request{
+			UpdateDimensionProperties: &sheets.UpdateDimensionPropertiesRequest{
+				Properties: &sheets.DimensionProperties{
+					HiddenByUser: true,
+				},
+				Fields: "hiddenByUser",
+				Range: &sheets.DimensionRange{
+					SheetId:    sheetID,
+					Dimension:  "COLUMNS",
+					StartIndex: 12,
+					EndIndex:   13,
+				},
+			},
+		})
+
+	default: // Monthly transaction tabs
+		colCount = 7
+		colWidths = []int64{158, 163, 144, 288, 233, 389, 260}
+		// Tanggal Column (B / index 1) as DATE centered
+		customRequests = append(customRequests, &sheets.Request{
+			RepeatCell: &sheets.RepeatCellRequest{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    1,
+					EndRowIndex:      1000,
+					StartColumnIndex: 1,
+					EndColumnIndex:   2,
+				},
+				Cell: &sheets.CellData{
+					UserEnteredFormat: &sheets.CellFormat{
+						NumberFormat: &sheets.NumberFormat{
+							Type:    "DATE",
+							Pattern: "dd/mm/yyyy",
+						},
+						HorizontalAlignment: "CENTER",
+					},
+				},
+				Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+			},
+		})
+		// Waktu Column (C / index 2) as TEXT centered
+		customRequests = append(customRequests, &sheets.Request{
+			RepeatCell: &sheets.RepeatCellRequest{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    1,
+					EndRowIndex:      1000,
+					StartColumnIndex: 2,
+					EndColumnIndex:   3,
+				},
+				Cell: &sheets.CellData{
+					UserEnteredFormat: &sheets.CellFormat{
+						NumberFormat: &sheets.NumberFormat{
+							Type: "TEXT",
+						},
+						HorizontalAlignment: "CENTER",
+					},
+				},
+				Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+			},
+		})
+		// Jumlah Column (G / index 6) as Rupiah
+		customRequests = append(customRequests, &sheets.Request{
+			RepeatCell: &sheets.RepeatCellRequest{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    1,
+					EndRowIndex:      1000,
+					StartColumnIndex: 6,
+					EndColumnIndex:   7,
+				},
+				Cell: &sheets.CellData{
+					UserEnteredFormat: &sheets.CellFormat{
+						NumberFormat: &sheets.NumberFormat{
+							Type:    "NUMBER",
+							Pattern: "\"Rp\" #,##0",
+						},
+						HorizontalAlignment: "RIGHT",
+					},
+				},
+				Fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
+			},
+		})
+		// Hide Column A (index 0, technical Transaction ID)
+		customRequests = append(customRequests, &sheets.Request{
+			UpdateDimensionProperties: &sheets.UpdateDimensionPropertiesRequest{
+				Properties: &sheets.DimensionProperties{
+					HiddenByUser: true,
+				},
+				Fields: "hiddenByUser",
+				Range: &sheets.DimensionRange{
+					SheetId:    sheetID,
+					Dimension:  "COLUMNS",
+					StartIndex: 0,
+					EndIndex:   1,
+				},
+			},
+		})
+	}
+
+	blackColor := &sheets.Color{Red: 0, Green: 0, Blue: 0}
+	whiteColor := &sheets.Color{Red: 1, Green: 1, Blue: 1}
+	bgHeaderColor := &sheets.Color{Red: 0.263, Green: 0.263, Blue: 0.263} // Dark grey template color: #434343
+
+	var requests []*sheets.Request
+
+	// Ensure grid column count is at least colCount to prevent dimension errors
+	requests = append(requests, &sheets.Request{
+		UpdateSheetProperties: &sheets.UpdateSheetPropertiesRequest{
+			Properties: &sheets.SheetProperties{
+				SheetId: int64(sheetID),
+				GridProperties: &sheets.GridProperties{
+					ColumnCount: colCount,
+				},
+			},
+			Fields: "gridProperties.columnCount",
+		},
+	})
+
+	// 3. Format Headers (Row 1)
+	requests = append(requests, &sheets.Request{
+		RepeatCell: &sheets.RepeatCellRequest{
+			Range: &sheets.GridRange{
+				SheetId:          sheetID,
+				StartRowIndex:    0,
+				EndRowIndex:      1,
+				StartColumnIndex: 0,
+				EndColumnIndex:   colCount,
+			},
+			Cell: &sheets.CellData{
+				UserEnteredFormat: &sheets.CellFormat{
+					BackgroundColor: bgHeaderColor,
+					TextFormat: &sheets.TextFormat{
+						Bold:            true,
+						FontFamily:      "Roboto",
+						FontSize:        11,
+						ForegroundColor: whiteColor,
+					},
+					HorizontalAlignment: "CENTER",
+					VerticalAlignment:   "MIDDLE",
+				},
+			},
+			Fields: "userEnteredFormat(backgroundColor,textFormat(bold,fontFamily,fontSize,foregroundColor),horizontalAlignment,verticalAlignment)",
+		},
+	})
+
+	// 4. Add brand-new crisp zebra banding
+	requests = append(requests, &sheets.Request{
+		AddBanding: &sheets.AddBandingRequest{
+			BandedRange: &sheets.BandedRange{
+				Range: &sheets.GridRange{
+					SheetId:          sheetID,
+					StartRowIndex:    0,
+					StartColumnIndex: 0,
+					EndColumnIndex:   colCount,
+				},
+				RowProperties: &sheets.BandingProperties{
+					HeaderColor:     bgHeaderColor,
+					FirstBandColor:  &sheets.Color{Red: 1.0, Green: 1.0, Blue: 1.0},        // White #FFFFFF
+					SecondBandColor: &sheets.Color{Red: 0.949, Green: 0.949, Blue: 0.949},  // Distinct Light Grey #F2F2F2
+				},
+			},
+		},
+	})
+
+	// 5. Format Data Rows (Rows 2 to 1000) - Font Roboto 10pt pure Black text color and clear manual background color
+	requests = append(requests, &sheets.Request{
+		RepeatCell: &sheets.RepeatCellRequest{
+			Range: &sheets.GridRange{
+				SheetId:          sheetID,
+				StartRowIndex:    1,
+				EndRowIndex:      1000,
+				StartColumnIndex: 0,
+				EndColumnIndex:   colCount,
+			},
+			Cell: &sheets.CellData{
+				UserEnteredFormat: &sheets.CellFormat{
+					TextFormat: &sheets.TextFormat{
+						FontFamily:      "Roboto",
+						FontSize:        10,
+						ForegroundColor: blackColor,
+					},
+				},
+			},
+			Fields: "userEnteredFormat.textFormat(fontFamily,fontSize,foregroundColor),userEnteredFormat.backgroundColor",
+		},
+	})
+
+	// 6. Add custom formats (DATE, TEXT, Rupiah, alignments)
+	requests = append(requests, customRequests...)
+
+	// 7. Set Standard Column Widths
+	for i, width := range colWidths {
+		requests = append(requests, &sheets.Request{
+			UpdateDimensionProperties: &sheets.UpdateDimensionPropertiesRequest{
+				Properties: &sheets.DimensionProperties{PixelSize: width},
+				Fields:     "pixelSize",
+				Range: &sheets.DimensionRange{
+					SheetId: sheetID, Dimension: "COLUMNS", StartIndex: int64(i), EndIndex: int64(i + 1),
+				},
+			},
+		})
+	}
+
+	// 8. Set Standard Row Heights (Margin)
+	// Header Row (Row 1 / index 0) to 44 pixels
+	requests = append(requests, &sheets.Request{
+		UpdateDimensionProperties: &sheets.UpdateDimensionPropertiesRequest{
+			Properties: &sheets.DimensionProperties{PixelSize: 44},
+			Fields:     "pixelSize",
+			Range: &sheets.DimensionRange{
+				SheetId:    sheetID,
+				Dimension:  "ROWS",
+				StartIndex: 0,
+				EndIndex:   1,
+			},
+		},
+	})
+
+	// Data Rows (Rows 2 to 1000 / index 1 to 1000) to 24 pixels
+	requests = append(requests, &sheets.Request{
+		UpdateDimensionProperties: &sheets.UpdateDimensionPropertiesRequest{
+			Properties: &sheets.DimensionProperties{PixelSize: 24},
+			Fields:     "pixelSize",
+			Range: &sheets.DimensionRange{
+				SheetId:    sheetID,
+				Dimension:  "ROWS",
+				StartIndex: 1,
+				EndIndex:   1000,
+			},
+		},
+	})
+
+	req := &sheets.BatchUpdateSpreadsheetRequest{
+		Requests: requests,
+	}
+
+	err = r.withRetry(ctx, func() error {
+		_, e := r.service.Spreadsheets.BatchUpdate(r.spreadsheetID, req).Context(ctx).Do()
+		return e
+	})
+	if err != nil {
+		return fmt.Errorf("failed to apply generic premium formatting to %s: %w", tabName, err)
+	}
+	return nil
+}
+
 // GetTransactions reads all transactions for a date range/tab.
 func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName string) ([]Transaction, error) {
 	if r == nil {
@@ -679,6 +1087,9 @@ func (r *GoogleSheetRepository) AppendNote(ctx context.Context, note *Note) erro
 		return fmt.Errorf("failed to append note: %w", err)
 	}
 
+	// Proactively trigger premium formatting
+	_ = r.FormatFont(ctx, "Notes")
+
 	return nil
 }
 
@@ -825,6 +1236,8 @@ func (r *GoogleSheetRepository) SetBudget(ctx context.Context, category string, 
 		if err != nil {
 			return fmt.Errorf("failed to update budget row: %w", err)
 		}
+		// Proactively trigger premium formatting
+		_ = r.FormatFont(ctx, "Budget")
 		return nil
 	}
 
@@ -851,6 +1264,9 @@ func (r *GoogleSheetRepository) SetBudget(ctx context.Context, category string, 
 	if err != nil {
 		return fmt.Errorf("failed to append budget row: %w", err)
 	}
+
+	// Proactively trigger premium formatting
+	_ = r.FormatFont(ctx, "Budget")
 
 	return nil
 }
@@ -958,6 +1374,9 @@ func (r *GoogleSheetRepository) EnsureTabExists(ctx context.Context, tabName str
 			// Clear the duplicated data in rows 2+
 			clearRange := fmt.Sprintf("'%s'!A2:Z1000", tabName)
 			_, _ = r.service.Spreadsheets.Values.Clear(r.spreadsheetID, clearRange, &sheets.ClearValuesRequest{}).Context(ctx).Do()
+
+			// Reset formatting to ensure clean slate without manual background color inheritance
+			_ = r.FormatFont(ctx, tabName)
 
 			// Reorder tabs in background so current month stays near front.
 			go func() { _ = r.ReorderTabs(context.Background()) }()
@@ -1114,12 +1533,10 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if exists {
-		return nil // Preserve existing user formatting
-	}
-
-	if err := r.EnsureTabExists(ctx, "Dashboard"); err != nil {
-		return err
+	if !exists {
+		if err := r.EnsureTabExists(ctx, "Dashboard"); err != nil {
+			return err
+		}
 	}
 
 	now := time.Now().In(WIB)
@@ -1157,44 +1574,41 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		{fmt.Sprintf("📊 FINANCIAL TRACKER %d", year), "", "", "", ""}, // row 1
 		{"", "", "", "", ""},                                             // row 2
 		{"📋 RINGKASAN KESELURUHAN", "", "", "", ""},                    // row 3
-		{"", "", "", "", ""},                                             // row 4
-		{"💵 Total Pemasukan", allMonthsSum("Pemasukan"), "", "💸 Total Pengeluaran", allMonthsSum("Pengeluaran")}, // row 5
-		{"💰 Saldo Bersih", "=B5-E5", "", "📈 Jumlah Transaksi", allMonthsCount()},                              // row 6
-		{"📊 Rasio Tabungan", `=IF(B5>0,(B5-E5)/B5*100,0)`, "", "", ""},                                          // row 7
-		{"", "", "", "", ""},                                                                                       // row 8
+		{"💵 Total Pemasukan", allMonthsSum("Pemasukan"), "", "💸 Total Pengeluaran", allMonthsSum("Pengeluaran")}, // row 4
+		{"💰 Saldo Bersih", "=B4-E4", "", "📈 Jumlah Transaksi", allMonthsCount()},                              // row 5
+		{"📊 Rasio Tabungan", `=IF(B4>0,(B4-E4)/B4*100,0)`, "", "", ""},                                          // row 6
+		{"", "", "", "", ""},                                                                                       // row 7
 	}
 
 	// ─── SECTION 2: Ringkasan Bulan Ini ───
 	currentMonthName := monthNamesID[now.Month()]
 	rows = append(rows,
-		[]interface{}{fmt.Sprintf("📅 RINGKASAN %s %d", strings.ToUpper(currentMonthName), year), "", "", "", ""}, // row 9
-		[]interface{}{"", "", "", "", ""},                                                                          // row 10
+		[]interface{}{fmt.Sprintf("📅 RINGKASAN %s %d", strings.ToUpper(currentMonthName), year), "", "", "", ""}, // row 8
 		[]interface{}{
 			"💵 Pemasukan",
 			fmt.Sprintf("=IFERROR(SUMIF('%s'!D:D,\"Pemasukan\",'%s'!G:G),0)", currentTab, currentTab),
 			"",
 			"💸 Pengeluaran",
 			fmt.Sprintf("=IFERROR(SUMIF('%s'!D:D,\"Pengeluaran\",'%s'!G:G),0)", currentTab, currentTab),
-		}, // row 11
+		}, // row 9
 		[]interface{}{
 			"💰 Saldo Bulan Ini",
-			"=B11-E11",
+			"=B9-E9",
 			"",
 			"📈 Transaksi",
 			fmt.Sprintf("=IF(ISERR(INDIRECT(\"'%s'!A2\")),0,COUNTIF(INDIRECT(\"'%s'!A2:A\"),\"<>\"))", currentTab, currentTab),
-		}, // row 12
-		[]interface{}{"📊 Rata-rata Pengeluaran/Hari", fmt.Sprintf("=IF(E12>0,E11/DAY(TODAY()),0)"), "", "", ""}, // row 13
-		[]interface{}{"", "", "", "", ""},                                                                         // row 14
+		}, // row 10
+		[]interface{}{"📊 Rata-rata Pengeluaran/Hari", fmt.Sprintf("=IF(E10>0,E9/DAY(TODAY()),0)"), "", "", ""}, // row 11
+		[]interface{}{"", "", "", "", ""},                                                                         // row 12
 	)
 
 	// ─── SECTION 3: Tren Bulanan ───
 	rows = append(rows,
-		[]interface{}{"📈 TREN BULANAN", "", "", "", ""},                         // row 15
-		[]interface{}{"", "", "", "", ""},                                         // row 16
-		[]interface{}{"Bulan", "Pemasukan", "Pengeluaran", "Saldo Bersih", "Transaksi"}, // row 17
+		[]interface{}{"📈 TREN BULANAN", "", "", "", ""},                         // row 13
+		[]interface{}{"Bulan", "Pemasukan", "Pengeluaran", "Saldo Bersih", "Transaksi"}, // row 14
 	)
 
-	trendStartRow := 18
+	trendStartRow := 15
 	for i, m := range monthOrder {
 		tab := fmt.Sprintf("%s %d", monthNamesID[m], year)
 		rowNum := trendStartRow + i
@@ -1204,7 +1618,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		countF := fmt.Sprintf("=IF(ISERR(INDIRECT(\"'%s'!A2\")),0,COUNTIF(INDIRECT(\"'%s'!A2:A\"),\"<>\"))", tab, tab)
 		rows = append(rows, []interface{}{monthNamesID[m], incomeF, expenseF, netF, countF})
 	}
-	trendEndRow := trendStartRow + 12 // row 30 (exclusive)
+	trendEndRow := trendStartRow + 12 // row 27 (exclusive)
 
 	// Total row for trend
 	rows = append(rows, []interface{}{
@@ -1213,47 +1627,21 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		fmt.Sprintf("=SUM(C%d:C%d)", trendStartRow, trendEndRow-1),
 		fmt.Sprintf("=SUM(D%d:D%d)", trendStartRow, trendEndRow-1),
 		fmt.Sprintf("=SUM(E%d:E%d)", trendStartRow, trendEndRow-1),
-	}) // row 30
-	rows = append(rows, []interface{}{"", "", "", "", ""}) // row 31
+	}) // row 27
+	rows = append(rows, []interface{}{"", "", "", "", ""}) // row 28
 
 	// ─── SECTION 4: Pengeluaran per Kategori (All-Time) ───
-	catSectionTitle := 32 // row 32
-	catHeaderRow := 33    // row 33
-	catDataStart := 34    // row 34
+	rows = append(rows,
+		[]interface{}{"📂 PENGELUARAN PER KATEGORI (ALL-TIME)", "", "", "", ""}, // row 29
+		[]interface{}{"Kategori", "Total (All-Time)", "% dari Total", fmt.Sprintf("Bulan Ini (%s)", currentMonthName), "% Bulan Ini"}, // row 30
+	)
+	catDataStart := 31
 
 	categories := []string{
 		"Makanan", "Transportasi", "Rumah Tangga", "Belanja",
 		"Kesehatan", "Pendidikan", "Hiburan", "Fashion",
 		"Komunikasi", "Perawatan", "Sosial", "Lainnya",
 	}
-
-	rows = append(rows,
-		[]interface{}{"📂 PENGELUARAN PER KATEGORI", "", "", "", ""},       // row 32
-		[]interface{}{"", "", "", "", ""},                                   // row 33 (spacer, header will be styled)
-		[]interface{}{"Kategori", "Total (All-Time)", "% dari Total", fmt.Sprintf("Bulan Ini (%s)", currentMonthName), "% Bulan Ini"}, // row 34 (was 33 but let me fix)
-	)
-	// Actually let me recalculate: after row 31 (empty), the next rows:
-	// row 32: section title
-	// row 33: header
-	// row 34-45: category data
-
-	// Recompute - rows currently has rows 1-31 (31 elements), so next append is row 32
-	// Let me fix the indices:
-	_ = catSectionTitle
-	_ = catHeaderRow
-
-	// Remove the extra spacer, recalculate
-	// Rows 1-31 are already added. Now add:
-	// Row 32: section title  -> already added above
-	// Row 33: needs to be the header row, not spacer
-	// So let me pop the last 3 and redo:
-	rows = rows[:len(rows)-3]
-
-	rows = append(rows,
-		[]interface{}{"📂 PENGELUARAN PER KATEGORI (ALL-TIME)", "", "", "", ""}, // row 32
-		[]interface{}{"Kategori", "Total (All-Time)", "% dari Total", fmt.Sprintf("Bulan Ini (%s)", currentMonthName), "% Bulan Ini"}, // row 33
-	)
-	catDataStart = 34
 
 	for i, cat := range categories {
 		rowNum := catDataStart + i
@@ -1264,12 +1652,12 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 			catParts = append(catParts, fmt.Sprintf("IFERROR(SUMIFS('%s'!G:G,'%s'!D:D,\"Pengeluaran\",'%s'!E:E,\"%s\"),0)", tab, tab, tab, cat))
 		}
 		allTimeCatF := "=" + strings.Join(catParts, "+")
-		pctAllF := fmt.Sprintf(`=IF(E5>0,B%d/E5*100,0)`, rowNum)
+		pctAllF := fmt.Sprintf(`=IF(E4>0,B%d/E4*100,0)`, rowNum)
 		monthCatF := fmt.Sprintf("=IFERROR(SUMIFS('%s'!G:G,'%s'!D:D,\"Pengeluaran\",'%s'!E:E,\"%s\"),0)", currentTab, currentTab, currentTab, cat)
-		pctMonthF := fmt.Sprintf(`=IF(E11>0,D%d/E11*100,0)`, rowNum)
+		pctMonthF := fmt.Sprintf(`=IF(E9>0,D%d/E9*100,0)`, rowNum)
 		rows = append(rows, []interface{}{cat, allTimeCatF, pctAllF, monthCatF, pctMonthF})
 	}
-	catDataEnd := catDataStart + len(categories) // row 46
+	catDataEnd := catDataStart + len(categories) // row 43
 
 	// Category totals
 	rows = append(rows, []interface{}{
@@ -1278,7 +1666,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		"",
 		fmt.Sprintf("=SUM(D%d:D%d)", catDataStart, catDataEnd-1),
 		"",
-	})
+	}) // row 43
 
 	// Write all data.
 	totalRows := len(rows)
@@ -1303,8 +1691,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 	headerBG := &sheets.Color{Red: 0.263, Green: 0.263, Blue: 0.263}
 	sectionBG := &sheets.Color{Red: 0.263, Green: 0.263, Blue: 0.263}
 	whiteFG := &sheets.Color{Red: 1, Green: 1, Blue: 1}
-	lightGray := &sheets.Color{Red: 0.952, Green: 0.952, Blue: 0.952} // #F3F3F3
-	// lightBlue := &sheets.Color{Red: 0.85, Green: 0.92, Blue: 0.97}
+	lightGray := &sheets.Color{Red: 0.949, Green: 0.949, Blue: 0.949} // #F2F2F2
 
 	// Unmerge existing merges first.
 	r.unmergeAll(ctx, sheetID)
@@ -1488,15 +1875,15 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 
 		// Section titles
 		sectionTitleStyle(3),  // Ringkasan Keseluruhan
-		sectionTitleStyle(9),  // Ringkasan Bulan Ini
-		sectionTitleStyle(15), // Tren Bulanan
-		sectionTitleStyle(32), // Pengeluaran per Kategori
+		sectionTitleStyle(8),  // Ringkasan Bulan Ini
+		sectionTitleStyle(13), // Tren Bulanan
+		sectionTitleStyle(29), // Pengeluaran per Kategori
 
-		// Summary sections (rows 5-7, 11-13): light blue bg
+		// Summary sections (rows 4-6, 9-11): light grey bg
 		&sheets.Request{
 			RepeatCell: &sheets.RepeatCellRequest{
 				Range: &sheets.GridRange{
-					SheetId: int64(sheetID), StartRowIndex: 4, EndRowIndex: 7,
+					SheetId: int64(sheetID), StartRowIndex: 3, EndRowIndex: 6,
 					StartColumnIndex: 0, EndColumnIndex: 5,
 				},
 				Cell: &sheets.CellData{
@@ -1511,7 +1898,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		&sheets.Request{
 			RepeatCell: &sheets.RepeatCellRequest{
 				Range: &sheets.GridRange{
-					SheetId: int64(sheetID), StartRowIndex: 10, EndRowIndex: 13,
+					SheetId: int64(sheetID), StartRowIndex: 8, EndRowIndex: 11,
 					StartColumnIndex: 0, EndColumnIndex: 5,
 				},
 				Cell: &sheets.CellData{
@@ -1525,21 +1912,19 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 		},
 
 		// Number format for summary values
-		numberFormatRange(5, 7, 1, 2),  // B5:B7 (Pemasukan, Saldo Bersih, Rasio)
-		numberFormatRange(5, 5, 4, 5),  // E5 (Total Pengeluaran)
-		countFormatRange(6, 6, 4, 5),   // E6 (Jumlah Transaksi)
+		numberFormatRange(4, 5, 1, 2),  // B4:B5 (Pemasukan, Saldo Bersih)
+		pctFormatRange(6, 6, 1),        // B6 (Rasio)
+		numberFormatRange(4, 4, 4, 5),  // E4 (Total Pengeluaran)
+		countFormatRange(5, 5, 4, 5),   // E5 (Jumlah Transaksi)
 		
-		numberFormatRange(11, 13, 1, 2), // B11:B13 (Pemasukan, Saldo, Rata-rata)
-		numberFormatRange(11, 11, 4, 5), // E11 (Pengeluaran)
-		countFormatRange(12, 12, 4, 5),  // E12 (Transaksi)
+		numberFormatRange(9, 11, 1, 2), // B9:B11 (Pemasukan, Saldo, Rata-rata)
+		numberFormatRange(9, 9, 4, 5),   // E9 (Pengeluaran)
+		countFormatRange(10, 10, 4, 5),  // E10 (Transaksi)
 
-		// Row 7 (Rasio Tabungan): percentage
-		pctFormatRange(7, 7, 1),
+		// Trend table header (row 14)
+		tableHeaderStyle(14),
 
-		// Trend table header (row 17)
-		tableHeaderStyle(17),
-
-		// Trend data number format (rows 18-30, cols B-D)
+		// Trend data number format (rows 15-27, cols B-D)
 		numberFormatRange(trendStartRow, trendEndRow, 1, 4), // B-D
 		countFormatRange(trendStartRow, trendEndRow, 4, 5),  // E (count)
 
@@ -1565,7 +1950,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 			AddBanding: &sheets.AddBandingRequest{
 				BandedRange: &sheets.BandedRange{
 					Range: &sheets.GridRange{
-						SheetId: int64(sheetID), StartRowIndex: 16, EndRowIndex: int64(trendEndRow),
+						SheetId: int64(sheetID), StartRowIndex: 13, EndRowIndex: int64(trendEndRow),
 						StartColumnIndex: 0, EndColumnIndex: 5,
 					},
 					RowProperties: &sheets.BandingProperties{
@@ -1577,8 +1962,8 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 			},
 		},
 
-		// Category header (row 33)
-		tableHeaderStyle(33),
+		// Category header (row 30)
+		tableHeaderStyle(30),
 
 		// Category data number format
 		numberFormatRange(catDataStart, catDataEnd, 1, 2), // B (all-time total)
@@ -1608,7 +1993,7 @@ func (r *GoogleSheetRepository) InitDashboard(ctx context.Context) error {
 			AddBanding: &sheets.AddBandingRequest{
 				BandedRange: &sheets.BandedRange{
 					Range: &sheets.GridRange{
-						SheetId: int64(sheetID), StartRowIndex: 32, EndRowIndex: int64(catDataEnd),
+						SheetId: int64(sheetID), StartRowIndex: 29, EndRowIndex: int64(catDataEnd),
 						StartColumnIndex: 0, EndColumnIndex: 5,
 					},
 					RowProperties: &sheets.BandingProperties{
@@ -1988,6 +2373,8 @@ func (r *GoogleSheetRepository) InitBudgetTab(ctx context.Context) error {
 		return fmt.Errorf("failed to format Budget tab: %w", err)
 	}
 
+	_ = r.FormatFont(ctx, "Budget")
+
 	return nil
 }
 
@@ -2072,6 +2459,8 @@ func (r *GoogleSheetRepository) InitNotesTab(ctx context.Context) error {
 		},
 	}).Context(ctx).Do()
 
+	_ = r.FormatFont(ctx, "Notes")
+
 	return nil
 }
 
@@ -2099,7 +2488,7 @@ func (r *GoogleSheetRepository) InitReminderTab(ctx context.Context) error {
 		return err
 	}
 
-	nCols := int64(len(ReminderHeaders))
+	nCols := int64(13)
 	sheetID, _ := r.getSheetIDWithRefresh(ctx, ReminderSheetName)
 	_, _ = r.service.Spreadsheets.BatchUpdate(r.spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{
 		Requests: []*sheets.Request{
@@ -2109,7 +2498,7 @@ func (r *GoogleSheetRepository) InitReminderTab(ctx context.Context) error {
 						SheetId:        int64(sheetID),
 						GridProperties: &sheets.GridProperties{
 							FrozenRowCount: 1,
-							ColumnCount:    12,
+							ColumnCount:    13,
 						},
 					},
 					Fields: "gridProperties(frozenRowCount,columnCount)",
@@ -2119,7 +2508,7 @@ func (r *GoogleSheetRepository) InitReminderTab(ctx context.Context) error {
 				RepeatCell: &sheets.RepeatCellRequest{
 					Range: &sheets.GridRange{
 						SheetId: int64(sheetID), StartRowIndex: 1,
-						StartColumnIndex: 0, EndColumnIndex: 12,
+						StartColumnIndex: 0, EndColumnIndex: 13,
 					},
 					Cell: &sheets.CellData{
 						UserEnteredFormat: &sheets.CellFormat{
@@ -2165,6 +2554,8 @@ func (r *GoogleSheetRepository) InitReminderTab(ctx context.Context) error {
 			},
 		},
 	}).Context(ctx).Do()
+
+	_ = r.FormatFont(ctx, ReminderSheetName)
 
 	return nil
 }
@@ -2510,6 +2901,9 @@ func (r *GoogleSheetRepository) AppendReminder(ctx context.Context, reminder *Re
 		return fmt.Errorf("failed to append reminder: %w", err)
 	}
 
+	// Proactively trigger premium formatting
+	_ = r.FormatFont(ctx, ReminderSheetName)
+
 	return nil
 }
 
@@ -2807,7 +3201,7 @@ func matchesFilter(tx Transaction, f TransactionFilter) bool {
 	return true
 }
 
-// RefreshDashboard updates only the "Ringkasan Bulan Ini" section (rows 9-14)
+// RefreshDashboard updates only the "Ringkasan Bulan Ini" section (rows 8-11)
 // in the Dashboard tab to point to the current month's tab. This is called on
 // the first message of a new month so the dashboard always reflects live data
 // without recreating the whole tab (which would lose user chart positions).
@@ -2833,10 +3227,9 @@ func (r *GoogleSheetRepository) RefreshDashboard(ctx context.Context) error {
 	}
 	currentMonthName := monthNames[now.Month()]
 
-	// Re-write rows 9-14: Ringkasan Bulan Ini section.
+	// Re-write rows 8-11: Ringkasan Bulan Ini section.
 	rows := [][]interface{}{
 		{fmt.Sprintf("📅 RINGKASAN %s %d", strings.ToUpper(currentMonthName), year), "", "", "", ""},
-		{"", "", "", "", ""},
 		{
 			"💵 Pemasukan",
 			fmt.Sprintf("=IFERROR(SUMIF('%s'!D:D,\"Pemasukan\",'%s'!G:G),0)", currentTab, currentTab),
@@ -2846,16 +3239,15 @@ func (r *GoogleSheetRepository) RefreshDashboard(ctx context.Context) error {
 		},
 		{
 			"💰 Saldo Bulan Ini",
-			"=B11-E11",
+			"=B9-E9",
 			"",
 			"📈 Transaksi",
 			fmt.Sprintf("=IF(ISERR(INDIRECT(\"'%s'!A2\")),0,COUNTIF(INDIRECT(\"'%s'!A2:A\"),\"<>\"))", currentTab, currentTab),
 		},
-		{"📊 Rata-rata Pengeluaran/Hari", "=IF(E12>0,E11/DAY(TODAY()),0)", "", "", ""},
-		{"", "", "", "", ""},
+		{"📊 Rata-rata Pengeluaran/Hari", fmt.Sprintf("=IF(E10>0,E9/DAY(TODAY()),0)"), "", "", ""},
 	}
 
-	writeRange := "Dashboard!A9:E14"
+	writeRange := "Dashboard!A8:E11"
 	values := &sheets.ValueRange{Values: rows}
 
 	return r.withRetry(ctx, func() error {
@@ -2938,11 +3330,8 @@ func (r *GoogleSheetRepository) ReorderTabs(ctx context.Context) error {
 	})
 }
 
-// ApplyZebraToExistingTabs applies zebra banding to all existing tabs that
-// don't have banding yet. Safe to run on every startup — it skips tabs that
-// already have banded ranges to avoid duplicate banding errors.
-//
-// This is useful for spreadsheets created before banding was implemented.
+// ApplyZebraToExistingTabs applies premium formatting and zebra banding to all existing tabs.
+// Safe to run on every startup — it clears manual background colors to ensure zebra banding is fully visible.
 func (r *GoogleSheetRepository) ApplyZebraToExistingTabs(ctx context.Context) error {
 	if r == nil {
 		return fmt.Errorf("repository is nil")
@@ -2950,24 +3339,17 @@ func (r *GoogleSheetRepository) ApplyZebraToExistingTabs(ctx context.Context) er
 
 	sp, err := r.service.Spreadsheets.Get(r.spreadsheetID).Context(ctx).Do()
 	if err != nil {
-		return fmt.Errorf("failed to get spreadsheet for zebra patch: %w", err)
+		return fmt.Errorf("failed to get spreadsheet for formatting patch: %w", err)
 	}
 
-	// colsFor returns how many data columns a tab has.
-	colsFor := func(title string) int {
+	// isFormattedTab returns true if the tab is one we want to format.
+	isFormattedTab := func(title string) bool {
 		switch title {
-		case "Budget":
-			return 5
-		case "Notes":
-			return 3
-		case ReminderSheetName:
-			return len(ReminderHeaders)
+		case "Budget", "Notes", ReminderSheetName:
+			return true
 		default:
-			if isMonthlyTabName(title) {
-				return 7
-			}
+			return isMonthlyTabName(title)
 		}
-		return 0 // Dashboard and unknown tabs — skip
 	}
 
 	for _, sh := range sp.Sheets {
@@ -2975,27 +3357,14 @@ func (r *GoogleSheetRepository) ApplyZebraToExistingTabs(ctx context.Context) er
 			continue
 		}
 		title := sh.Properties.Title
-		nCols := colsFor(title)
-		if nCols == 0 {
+		if !isFormattedTab(title) {
 			continue // skip Dashboard and unknown tabs
 		}
 
-		// Skip if banding already applied.
-		if len(sh.BandedRanges) > 0 {
-			continue
-		}
-
-		sheetID := int(sh.Properties.SheetId)
-		req := zebraBandingReq(sheetID, 0, nCols)
-		if err := r.withRetry(ctx, func() error {
-			_, e := r.service.Spreadsheets.BatchUpdate(
-				r.spreadsheetID,
-				&sheets.BatchUpdateSpreadsheetRequest{Requests: []*sheets.Request{req}},
-			).Context(ctx).Do()
-			return e
-		}); err != nil {
-			// Non-fatal — log and continue to next tab.
-			_ = err
+		// Run premium formatting to reset manual backgrounds and restore zebra banding
+		if err := r.FormatFont(ctx, title); err != nil {
+			// Log and continue to next tab
+			log.Printf("  ⚠️  Failed to format existing tab %s: %v", title, err)
 		}
 	}
 
