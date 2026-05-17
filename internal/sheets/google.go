@@ -23,6 +23,13 @@ type GoogleSheetRepository struct {
 	// txMu serialises the read-ID + append sequence so concurrent messages
 	// never generate the same transaction ID.
 	txMu sync.Mutex
+
+	// In-memory cache to reduce Google Sheets API roundtrips
+	cacheMu         sync.RWMutex
+	budgetCache     map[string]float64
+	budgetCacheTime time.Time
+	txCache         map[string][]Transaction
+	txCacheTime     map[string]time.Time
 }
 
 var _ SheetRepository = (*GoogleSheetRepository)(nil)
@@ -44,9 +51,12 @@ func NewGoogleSheetRepository(credsPath, credsJSON, spreadsheetID string) (*Goog
 	}
 
 	return &GoogleSheetRepository{
-		service:       srv,
-		spreadsheetID: spreadsheetID,
-		tabManager:    NewTabManager(srv, spreadsheetID),
+		service:         srv,
+		spreadsheetID:   spreadsheetID,
+		tabManager:      NewTabManager(srv, spreadsheetID),
+		budgetCache:     make(map[string]float64),
+		txCache:         make(map[string][]Transaction),
+		txCacheTime:     make(map[string]time.Time),
 	}, nil
 }
 
@@ -291,6 +301,13 @@ func (r *GoogleSheetRepository) AppendTransaction(ctx context.Context, tx *Trans
 		})
 	}
 
+	r.cacheMu.Lock()
+	if r.txCache != nil {
+		delete(r.txCache, tabName)
+		delete(r.txCacheTime, tabName)
+	}
+	r.cacheMu.Unlock()
+
 	return nil
 }
 
@@ -299,8 +316,31 @@ func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName str
 	if r == nil {
 		return nil, fmt.Errorf("repository is nil")
 	}
-	if strings.TrimSpace(tabName) == "" {
+	tabName = strings.TrimSpace(tabName)
+	if tabName == "" {
 		return nil, fmt.Errorf("tab name is required")
+	}
+
+	r.cacheMu.RLock()
+	if r.txCache != nil {
+		if txs, ok := r.txCache[tabName]; ok && time.Since(r.txCacheTime[tabName]) < 2*time.Minute {
+			defer r.cacheMu.RUnlock()
+			res := make([]Transaction, len(txs))
+			copy(res, txs)
+			return res, nil
+		}
+	}
+	r.cacheMu.RUnlock()
+
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+
+	if r.txCache != nil {
+		if txs, ok := r.txCache[tabName]; ok && time.Since(r.txCacheTime[tabName]) < 2*time.Minute {
+			res := make([]Transaction, len(txs))
+			copy(res, txs)
+			return res, nil
+		}
 	}
 
 	readRange := fmt.Sprintf("'%s'!A2:G", tabName)
@@ -309,21 +349,29 @@ func (r *GoogleSheetRepository) GetTransactions(ctx context.Context, tabName str
 		return nil, fmt.Errorf("failed to read transactions from %s: %w", tabName, err)
 	}
 
-	if resp == nil || len(resp.Values) == 0 {
-		return []Transaction{}, nil
-	}
-
-	out := make([]Transaction, 0, len(resp.Values))
-	for _, row := range resp.Values {
-		tx, err := TransactionFromRow(row)
-		if err != nil {
-			log.Printf("⚠️ [SHEETS] Skipping row due to parse error: %v | Row: %v", err, row)
-			continue
+	out := []Transaction{}
+	if resp != nil && len(resp.Values) > 0 {
+		out = make([]Transaction, 0, len(resp.Values))
+		for _, row := range resp.Values {
+			tx, err := TransactionFromRow(row)
+			if err != nil {
+				log.Printf("⚠️ [SHEETS] Skipping row due to parse error: %v | Row: %v", err, row)
+				continue
+			}
+			out = append(out, *tx)
 		}
-		out = append(out, *tx)
 	}
 
-	return out, nil
+	if r.txCache == nil {
+		r.txCache = make(map[string][]Transaction)
+		r.txCacheTime = make(map[string]time.Time)
+	}
+	r.txCache[tabName] = out
+	r.txCacheTime[tabName] = time.Now()
+
+	res := make([]Transaction, len(out))
+	copy(res, out)
+	return res, nil
 }
 
 // ClearRange deletes values in the specified A1 range.
@@ -396,6 +444,13 @@ func (r *GoogleSheetRepository) UpdateTransaction(ctx context.Context, tabName s
 		return fmt.Errorf("failed to update transaction row %d on %s: %w", rowIndex, tabName, err)
 	}
 
+	r.cacheMu.Lock()
+	if r.txCache != nil {
+		delete(r.txCache, tabName)
+		delete(r.txCacheTime, tabName)
+	}
+	r.cacheMu.Unlock()
+
 	return nil
 }
 
@@ -436,6 +491,13 @@ func (r *GoogleSheetRepository) DeleteTransaction(ctx context.Context, tabName s
 		return fmt.Errorf("failed to delete transaction row %d on %s: %w", rowIndex, tabName, err)
 	}
 
+	r.cacheMu.Lock()
+	if r.txCache != nil {
+		delete(r.txCache, tabName)
+		delete(r.txCacheTime, tabName)
+	}
+	r.cacheMu.Unlock()
+
 	return nil
 }
 
@@ -470,6 +532,67 @@ func (r *GoogleSheetRepository) AppendNote(ctx context.Context, note *Note) erro
 	return nil
 }
 
+func (r *GoogleSheetRepository) getBudgetsFromCache(ctx context.Context) (map[string]float64, error) {
+	r.cacheMu.RLock()
+	if r.budgetCache != nil && time.Since(r.budgetCacheTime) < 2*time.Minute {
+		defer r.cacheMu.RUnlock()
+		res := make(map[string]float64, len(r.budgetCache))
+		for k, v := range r.budgetCache {
+			res[k] = v
+		}
+		return res, nil
+	}
+	r.cacheMu.RUnlock()
+
+	r.cacheMu.Lock()
+	defer r.cacheMu.Unlock()
+
+	if r.budgetCache != nil && time.Since(r.budgetCacheTime) < 2*time.Minute {
+		res := make(map[string]float64, len(r.budgetCache))
+		for k, v := range r.budgetCache {
+			res[k] = v
+		}
+		return res, nil
+	}
+
+	if err := r.EnsureTabExists(ctx, "Budget"); err != nil {
+		return nil, err
+	}
+	_ = r.ensureBudgetHeader(ctx)
+
+	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, "'Budget'!A2:B").Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read budget: %w", err)
+	}
+
+	cache := make(map[string]float64)
+	if resp != nil {
+		for _, row := range resp.Values {
+			if len(row) < 2 {
+				continue
+			}
+			cat := strings.TrimSpace(fmt.Sprintf("%v", row[0]))
+			if cat == "" {
+				continue
+			}
+			amount, err := cellFloat64(row[1])
+			if err != nil {
+				continue
+			}
+			cache[strings.ToLower(cat)] = amount
+		}
+	}
+
+	r.budgetCache = cache
+	r.budgetCacheTime = time.Now()
+
+	res := make(map[string]float64, len(cache))
+	for k, v := range cache {
+		res[k] = v
+	}
+	return res, nil
+}
+
 // GetBudget reads the budget for a category.
 func (r *GoogleSheetRepository) GetBudget(ctx context.Context, category string) (float64, error) {
 	if r == nil {
@@ -481,33 +604,12 @@ func (r *GoogleSheetRepository) GetBudget(ctx context.Context, category string) 
 		return 0, fmt.Errorf("category is required")
 	}
 
-	if err := r.EnsureTabExists(ctx, "Budget"); err != nil {
+	budgets, err := r.getBudgetsFromCache(ctx)
+	if err != nil {
 		return 0, err
 	}
-	_ = r.ensureBudgetHeader(ctx)
 
-	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, "'Budget'!A2:B").Context(ctx).Do()
-	if err != nil {
-		return 0, fmt.Errorf("failed to read budget: %w", err)
-	}
-	if resp == nil || len(resp.Values) == 0 {
-		return 0, nil
-	}
-
-	for _, row := range resp.Values {
-		if len(row) < 2 {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(fmt.Sprintf("%v", row[0])), cat) {
-			amount, err := cellFloat64(row[1])
-			if err != nil {
-				return 0, fmt.Errorf("invalid budget value for %s: %w", cat, err)
-			}
-			return amount, nil
-		}
-	}
-
-	return 0, nil
+	return budgets[strings.ToLower(cat)], nil
 }
 
 // SetBudget writes/updates budget for a category.
@@ -523,6 +625,11 @@ func (r *GoogleSheetRepository) SetBudget(ctx context.Context, category string, 
 	if amount <= 0 {
 		return fmt.Errorf("amount must be greater than zero")
 	}
+
+	r.cacheMu.Lock()
+	r.budgetCache = nil
+	r.budgetCacheTime = time.Time{}
+	r.cacheMu.Unlock()
 
 	if err := r.EnsureTabExists(ctx, "Budget"); err != nil {
 		return err
@@ -612,33 +719,20 @@ func (r *GoogleSheetRepository) GetCategoryTotal(ctx context.Context, tabName st
 		return 0, fmt.Errorf("category is required")
 	}
 
-	readRange := fmt.Sprintf("'%s'!D2:G", tabName)
-	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, readRange).Context(ctx).Do()
+	txs, err := r.GetTransactions(ctx, tabName)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read category total from %s: %w", tabName, err)
-	}
-	if resp == nil || len(resp.Values) == 0 {
-		return 0, nil
+		return 0, err
 	}
 
 	var total float64
-	for _, row := range resp.Values {
-		if len(row) < 4 {
+	for _, tx := range txs {
+		if tx.Type != Expense {
 			continue
 		}
-		txType := strings.TrimSpace(fmt.Sprintf("%v", row[0]))
-		cat := strings.TrimSpace(fmt.Sprintf("%v", row[1]))
-		if txType != string(Expense) {
+		if !strings.EqualFold(tx.Category, category) {
 			continue
 		}
-		if !strings.EqualFold(cat, category) {
-			continue
-		}
-		amount, err := cellFloat64(row[3])
-		if err != nil {
-			continue
-		}
-		total += amount
+		total += tx.Amount
 	}
 
 	return total, nil
@@ -2399,20 +2493,15 @@ func (r *GoogleSheetRepository) ListDueReminders(ctx context.Context, now time.T
 
 func (r *GoogleSheetRepository) nextDailyTransactionID(ctx context.Context, tabName string, when time.Time) (string, error) {
 	datePrefix := when.In(WIB).Format("20060102")
-	readRange := fmt.Sprintf("'%s'!A2:A", tabName)
 
-	resp, err := r.service.Spreadsheets.Values.Get(r.spreadsheetID, readRange).Context(ctx).Do()
+	txs, err := r.GetTransactions(ctx, tabName)
 	if err != nil {
-		return "", fmt.Errorf("failed to read existing transaction IDs from %s: %w", tabName, err)
+		return "", err
 	}
 
 	maxCounter := 0
-	for _, row := range resp.Values {
-		if len(row) == 0 {
-			continue
-		}
-		id := strings.TrimSpace(fmt.Sprintf("%v", row[0]))
-		counter, ok := parseDailyCounter(id, datePrefix)
+	for _, tx := range txs {
+		counter, ok := parseDailyCounter(tx.ID, datePrefix)
 		if !ok {
 			continue
 		}
