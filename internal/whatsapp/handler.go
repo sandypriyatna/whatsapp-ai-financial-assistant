@@ -2,6 +2,7 @@ package whatsapp
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
@@ -92,8 +93,8 @@ func (h *Handler) handleMessage(ctx context.Context, evt *events.Message) {
 			log.Printf("🚫 [REJECTED] Unauthorized DM from: %s", evt.Info.Sender.User)
 			return
 		}
-		// Use full JID string (could be @s.whatsapp.net or @lid).
-		replyTo = evt.Info.Sender.String()
+		// Use pure JID string with no device part (could be @s.whatsapp.net or @lid).
+		replyTo = fmt.Sprintf("%s@%s", evt.Info.Sender.User, evt.Info.Sender.Server)
 	}
 
 	// Extract text from all supported variants.
@@ -136,6 +137,9 @@ func sendTextWithPresenceToJID(ctx context.Context, m Messenger, target, text st
 	if err != nil {
 		return err
 	}
+	
+	// Force strip the device part to ensure WhatsApp server accepts the recipient
+	jid.Device = 0
 
 	// Send presence (best-effort).
 	_ = m.SendPresenceToJID(ctx, jid)
