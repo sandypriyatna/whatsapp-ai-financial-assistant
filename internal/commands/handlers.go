@@ -85,7 +85,7 @@ func (f *ReportHandlerFactory) Handler(ctx context.Context, args string) string 
 
 	report, err := f.finance.GenerateReport(ctx, period)
 	if err != nil {
-		return formatter.FormatError("Gagal membuat laporan: " + err.Error())
+		return "⚠️ *Laporan tidak dapat dibuat:*\nSaat ini bot baru mendukung laporan *hari ini* (harian), *minggu ini* (mingguan), dan *bulan ini* (bulanan). Silakan coba lagi dengan salah satu periode tersebut ya! 😊"
 	}
 
 	switch report.Period {

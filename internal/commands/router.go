@@ -41,6 +41,11 @@ func (r *Router) Route(ctx context.Context, text string) (string, bool) {
 		return "", false
 	}
 
+	// Rigid commands MUST start with "/" prefix, otherwise treat as conversational AI.
+	if !strings.HasPrefix(trimmed, "/") {
+		return "", false
+	}
+
 	parts := strings.SplitN(trimmed, " ", 2)
 	cmd := normalizeCommand(parts[0])
 
