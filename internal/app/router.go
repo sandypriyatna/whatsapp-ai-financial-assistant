@@ -289,6 +289,7 @@ func (r *AppRouter) routeWithLLM(ctx context.Context, sender, text string) strin
 
 	llmResp, err := r.llmClient.ChatWithHistory(ctx, messages)
 	if err != nil {
+		log.Printf("❌ [LLM_ERROR] ChatWithHistory failed: %v", err)
 		return formatter.FormatError("Maaf, sedang ada gangguan. Coba lagi nanti ya.")
 	}
 
@@ -676,6 +677,9 @@ func (r *AppRouter) conversationalErrorFallback(ctx context.Context, action stri
 	)
 
 	resp, chatErr := r.llmClient.Chat(ctx, r.systemPrompt, fallbackPrompt)
+	if chatErr != nil {
+		log.Printf("❌ [LLM_ERROR] conversationalErrorFallback Chat failed: %v", chatErr)
+	}
 	if chatErr == nil && strings.TrimSpace(resp.Content) != "" {
 		return resp.Content
 	}
